@@ -73,30 +73,64 @@ async function main() {
 
     console.log('設定取得完了:', settings.template)
 
-    // ブラウザ起動
+    // ブラウザ起動（サロンボード対策：検知回避オプション追加）
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--lang=ja-JP',
+      ],
     })
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       viewport: { width: 1280, height: 900 },
+      locale: 'ja-JP',
+      timezoneId: 'Asia/Tokyo',
+      extraHTTPHeaders: {
+        'Accept-Language': 'ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7',
+      },
     })
+
+    // webdriverプロパティを隠す（ボット検知対策）
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+    })
+
     const page = await context.newPage()
 
     // --- ステップ1: ログイン ---
     console.log('ログイン中...')
-    await page.goto('https://salonboard.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 })
 
-    // ログインフォームが表示されるまで待機
-    await page.waitForSelector('input[name="userId"], input[name="loginId"], input[type="text"]', { timeout: 10000 })
+    // まずトップページにアクセスしてCookieを取得
+    await page.goto('https://salonboard.com/', {
+      waitUntil: 'commit',
+      timeout: 60000,
+    }).catch(() => {})
+    await page.waitForTimeout(2000)
+
+    // ログインページへ
+    await page.goto('https://salonboard.com/login/', {
+      waitUntil: 'commit',
+      timeout: 60000,
+    })
+
+    // ログインフォームが表示されるまで最大30秒待機
+    await page.waitForSelector(
+      'input[name="userId"], input[name="loginId"], input[type="text"]',
+      { timeout: 30000 }
+    )
+    console.log('ログインフォーム確認')
 
     await page.fill('input[name="userId"]', SALON_ID)
     await page.fill('input[name="password"]', SALON_PASS)
+    await page.waitForTimeout(500)
     await page.click('button[type="submit"], input[type="submit"], .btn-login, a:has-text("ログイン")')
 
-    // ログイン後のページ遷移を待つ（networkidleではなくURLの変化で判定）
-    await page.waitForURL(url => !url.includes('/login/'), { timeout: 15000 }).catch(() => {})
+    // ログイン後のURLが変わるまで待つ
+    await page.waitForURL(url => !url.includes('/login/'), { timeout: 20000 }).catch(() => {})
 
     // ログイン確認
     const currentUrl = page.url()
@@ -117,7 +151,8 @@ async function main() {
 
     let calendarLoaded = false
     for (const url of calendarUrls) {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
+      await page.goto(url, { waitUntil: 'commit', timeout: 30000 }).catch(() => {})
+      await page.waitForTimeout(2000)
       if (!page.url().includes('/login/')) {
         calendarLoaded = true
         console.log('カレンダー読み込み:', page.url())
@@ -164,8 +199,8 @@ async function main() {
 
     // --- ステップ4: サロン掲載情報編集ページでキャッチ更新 ---
     console.log('キャッチコピー更新中...')
-    await page.goto('https://salonboard.com/CNB/draft/salonEdit/', { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForSelector('input, textarea', { timeout: 10000 }).catch(() => {})
+    await page.goto('https://salonboard.com/CNB/draft/salonEdit/', { waitUntil: 'commit', timeout: 60000 })
+    await page.waitForSelector('input, textarea', { timeout: 20000 }).catch(() => {})
 
     // キャッチフィールドを特定して更新
     const catchUpdated = await updateCatchField(page, generatedCatch)
@@ -178,8 +213,8 @@ async function main() {
 
     // --- ステップ5: 反映申請ページで「反映申請」ボタンをクリック ---
     console.log('反映申請中...')
-    await page.goto('https://salonboard.com/CNB/reflect/reflectTop/', { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForSelector('table, tr', { timeout: 10000 }).catch(() => {})
+    await page.goto('https://salonboard.com/CNB/reflect/reflectTop/', { waitUntil: 'commit', timeout: 60000 })
+    await page.waitForSelector('table, tr', { timeout: 20000 }).catch(() => {})
     const reflected = await clickReflectButton(page)
     if (reflected) {
       console.log('反映申請完了!')
