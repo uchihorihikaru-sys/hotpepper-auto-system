@@ -170,6 +170,16 @@ async function main() {
 
     console.log('キャッチコピー更新完了!')
 
+    // --- ステップ5: 反映申請ページで「反映申請」ボタンをクリック ---
+    console.log('反映申請中...')
+    await page.goto('https://salonboard.com/CNB/reflect/reflectTop/', { waitUntil: 'networkidle' })
+    const reflected = await clickReflectButton(page)
+    if (reflected) {
+      console.log('反映申請完了!')
+    } else {
+      console.log('反映申請ボタンが見つからないか、既に申請済みです')
+    }
+
   } catch (err) {
     errorMessage = err.message || String(err)
     console.error('エラー:', errorMessage)
@@ -340,6 +350,69 @@ async function updateCatchField(page, catchText) {
     return true
   } catch (err) {
     console.error('キャッチ更新エラー:', err.message)
+    return false
+  }
+}
+
+/**
+ * 反映申請ページで「サロン掲載情報」の反映申請ボタンをクリック
+ * URL: https://salonboard.com/CNB/reflect/reflectTop/
+ */
+async function clickReflectButton(page) {
+  try {
+    await page.waitForLoadState('networkidle')
+
+    if (process.env.DEBUG_SCREENSHOT) {
+      await page.screenshot({ path: 'debug-reflect.png', fullPage: true })
+    }
+
+    // 「反映申請」ボタンを全て取得
+    const reflectBtns = await page.$$('input[value="反映申請"], button:has-text("反映申請")')
+    console.log(`反映申請ボタン数: ${reflectBtns.length}`)
+
+    for (const btn of reflectBtns) {
+      const isDisabled = await btn.evaluate(el => el.disabled)
+      if (isDisabled) continue
+
+      // 同じ行のテキストを取得して「サロン掲載情報」の行か確認
+      const rowText = await btn.evaluate(el => {
+        const row = el.closest('tr')
+        return row ? row.textContent : ''
+      })
+
+      // スタイリスト・メニュー等を除いた「サロン掲載情報」行のみ対象
+      if (rowText.includes('サロン掲載情報') &&
+          !rowText.includes('スタイリスト掲載情報') &&
+          !rowText.includes('メニュー掲載情報') &&
+          !rowText.includes('スタイル掲載情報') &&
+          !rowText.includes('こだわり掲載情報') &&
+          !rowText.includes('特集掲載情報') &&
+          !rowText.includes('クーポン掲載情報')) {
+        await btn.click()
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        console.log('サロン掲載情報の反映申請ボタンをクリックしました')
+        return true
+      }
+    }
+
+    // 行テキストで特定できない場合は最初の有効なボタンをクリック（フォールバック）
+    if (reflectBtns.length > 0) {
+      for (const btn of reflectBtns) {
+        const isDisabled = await btn.evaluate(el => el.disabled)
+        if (!isDisabled) {
+          await btn.click()
+          await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+          console.log('反映申請ボタン（フォールバック）をクリックしました')
+          return true
+        }
+      }
+    }
+
+    console.warn('有効な反映申請ボタンが見つかりませんでした（既に申請済みの可能性あり）')
+    return false
+
+  } catch (err) {
+    console.error('反映申請エラー:', err.message)
     return false
   }
 }
