@@ -69,28 +69,69 @@ async function runUpdate() {
 
     console.log('[Lay. Catch Board] 設定取得:', settings.template)
 
-    // Step1: スケジュールページから空き枠取得
-    availableSlots = await getAvailableSlots()
-    console.log('[Lay. Catch Board] 空き枠:', availableSlots)
+    // ============================================================
+    // Step1: 実行時間帯に応じたスロット選択ロジック
+    // ・7時〜18時 → 当日の空き枠（2時間以上先のみ有効）
+    // ・19時〜24時 → 翌日の空き枠
+    // ・当日に有効な空き枠がない場合は翌日にフォールバック
+    // ============================================================
+    const now = new Date()
+    const hour = now.getHours()
+    const nowMinutes = hour * 60 + now.getMinutes()
+    const MIN_GAP_MINUTES = 120 // 2時間前まで反映
+
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    let selectedSlot = null
+    let catchPrefix = '本日'
+
+    if (hour >= 19) {
+      // 19時〜24時 → 翌日モード
+      availableSlots = await getAvailableSlots(tomorrow)
+      console.log('[Lay. Catch Board] 翌日スロット:', availableSlots)
+      selectedSlot = availableSlots.length > 0 ? availableSlots[0] : null
+      catchPrefix = '明日'
+
+    } else {
+      // 7時〜18時（+ 0時〜6時）→ 当日優先
+      availableSlots = await getAvailableSlots(now)
+      console.log('[Lay. Catch Board] 当日スロット:', availableSlots)
+
+      // 2時間以上先のスロットのみ有効
+      const validToday = availableSlots.filter(slot => {
+        const [h, m] = slot.split(':').map(Number)
+        return (h * 60 + m) - nowMinutes >= MIN_GAP_MINUTES
+      })
+
+      if (validToday.length > 0) {
+        selectedSlot = validToday[0]
+        catchPrefix = '本日'
+        console.log('[Lay. Catch Board] 当日有効スロット:', validToday)
+      } else {
+        // 当日に有効スロットなし → 翌日へフォールバック
+        console.log('[Lay. Catch Board] 当日スロットなし → 翌日を確認')
+        const tomorrowSlots = await getAvailableSlots(tomorrow)
+        availableSlots = tomorrowSlots
+        console.log('[Lay. Catch Board] 翌日スロット:', tomorrowSlots)
+        selectedSlot = tomorrowSlots.length > 0 ? tomorrowSlots[0] : null
+        catchPrefix = '明日'
+      }
+    }
 
     // Step2: キャッチコピー生成
-    const now = new Date()
-    const nowMinutes = now.getHours() * 60 + now.getMinutes()
-
-    const futureSlots = availableSlots.filter(slot => {
-      const [h, m] = slot.split(':').map(Number)
-      return (h * 60 + m) > nowMinutes
-    })
-
-    if (futureSlots.length > 0) {
-      const earliest = futureSlots[0]
-      const [h, m] = earliest.split(':').map(Number)
+    if (selectedSlot) {
+      const [h, m] = selectedSlot.split(':').map(Number)
       const timeLabel = m === 0 ? `${h}時` : `${h}時${m}分`
-      generatedCatch = settings.template.replace('{TIME}', timeLabel)
+      generatedCatch = settings.template
+        .replace('本日', catchPrefix)
+        .replace('{TIME}', timeLabel)
 
       // 文字数チェック（50文字以内）
       if (countChars(generatedCatch) > 50) {
-        generatedCatch = settings.template.replace('{TIME}', `${now.getHours() + 1}時`)
+        generatedCatch = settings.template
+          .replace('本日', catchPrefix)
+          .replace('{TIME}', `${h}時`)
       }
       status = 'success'
     } else {
@@ -151,9 +192,12 @@ function getSettings() {
 // ============================================================
 // スケジュールページから空き枠を取得
 // ============================================================
-async function getAvailableSlots() {
-  const today = new Date()
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+async function getAvailableSlots(date = new Date()) {
+  // JST日付文字列を生成（ローカル時刻ベース）
+  const y = date.getFullYear()
+  const mo = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const dateStr = `${y}${mo}${d}`
   const url = `https://salonboard.com/CLP/bt/schedule/salonSchedule/?date=${dateStr}`
 
   const tab = await chrome.tabs.create({ url, active: false })
@@ -246,25 +290,19 @@ async function updateCatchOnSalonBoard(catchText) {
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: (text) => {
-        // キャッチフィールドを探す（maxlength=50 のinput）
-        const inputs = document.querySelectorAll('input[type="text"]')
-        let catchInput = null
+        // キャッチフィールドを探す（id優先）
+        let catchInput = document.getElementById('idSalonTopCatch')
 
-        for (const input of inputs) {
-          if (input.maxLength === 50 ||
-              input.name === 'catch' ||
-              input.name === 'catchCopy' ||
-              input.name?.toLowerCase().includes('catch')) {
-            catchInput = input
-            break
-          }
+        if (!catchInput) {
+          // フォールバック: name属性にcatchを含む
+          catchInput = document.querySelector('input[name*="catch"], input[name*="Catch"], input[name*="CATCH"]')
         }
 
         if (!catchInput) {
-          // フォールバック: 値を確認して探す
+          // フォールバック: 既存値から探す
+          const inputs = document.querySelectorAll('input[type="text"]')
           for (const input of inputs) {
-            if (input.value?.includes('空きあり') || input.value?.includes('空き') ||
-                input.value?.includes('予約')) {
+            if (input.value?.includes('空きあり') || input.value?.includes('空き') || input.value?.includes('予約')) {
               catchInput = input
               break
             }
@@ -280,21 +318,35 @@ async function updateCatchOnSalonBoard(catchText) {
         catchInput.dispatchEvent(new Event('input', { bubbles: true }))
         catchInput.dispatchEvent(new Event('change', { bubbles: true }))
 
-        // 登録ボタンを探してクリック
-        const buttons = document.querySelectorAll('input[type="submit"], button[type="submit"], button')
-        let submitBtn = null
-        for (const btn of buttons) {
-          const val = btn.value || btn.textContent || ''
-          if (val.includes('登録') || val.includes('登 録') || val.includes('保存')) {
-            submitBtn = btn
-            break
-          }
+        // 登録ボタン: サロンボードは <a onclick="doRegister(event)"> + 画像
+        // パターン1: doRegister関数を直接呼び出す（最確実）
+        if (typeof doRegister === 'function') {
+          doRegister(new Event('click'))
+          return { success: true, catchText: text, method: 'doRegister()' }
         }
 
-        if (!submitBtn) return { success: false, error: '登録ボタンが見つかりません' }
+        // パターン2: onclick="doRegister" の <a> タグをクリック
+        const registerLink = document.querySelector('a[onclick*="doRegister"]')
+        if (registerLink) {
+          registerLink.click()
+          return { success: true, catchText: text, method: 'a[doRegister].click()' }
+        }
 
-        submitBtn.click()
-        return { success: true, catchText: text }
+        // パターン3: 登録画像ボタン（toroku）を探す
+        const torokuImg = document.querySelector('img[src*="toroku"]')
+        if (torokuImg) {
+          torokuImg.closest('a')?.click() || torokuImg.click()
+          return { success: true, catchText: text, method: 'toroku img click' }
+        }
+
+        // パターン4: フォームをsubmit
+        const form = catchInput.closest('form')
+        if (form) {
+          form.submit()
+          return { success: true, catchText: text, method: 'form.submit()' }
+        }
+
+        return { success: false, error: '登録ボタンが見つかりません（doRegister/toroku/form いずれも未発見）' }
       },
       args: [catchText]
     })
@@ -326,38 +378,37 @@ async function clickReflectButton() {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        // 「サロン掲載情報」行の「反映申請」ボタンを探す
+        // サロンボードの反映申請ボタンを探してクリック
+        // ※ 仕様: スタイル掲載情報行の「反映申請」ボタンがお店全体を一括反映する
         const rows = document.querySelectorAll('tr')
 
+        // 優先1: スタイル掲載情報行（お店全体の一括反映ボタン）
         for (const row of rows) {
+          const firstCell = row.querySelector('td, th')?.textContent?.trim() || ''
           const rowText = row.textContent || ''
-          if (rowText.includes('サロン掲載情報') &&
-              !rowText.includes('スタイリスト') &&
-              !rowText.includes('メニュー') &&
-              !rowText.includes('スタイル') &&
-              !rowText.includes('クーポン') &&
-              !rowText.includes('こだわり') &&
-              !rowText.includes('特集')) {
-
-            const btns = row.querySelectorAll('input[type="submit"], button')
+          if (rowText.includes('スタイル掲載情報') && !rowText.includes('スタイリスト')) {
+            const btns = row.querySelectorAll('input[type="submit"], button, a')
             for (const btn of btns) {
-              if (!btn.disabled && (btn.value?.includes('反映申請') || btn.textContent?.includes('反映申請'))) {
+              const label = btn.value || btn.textContent || ''
+              if (!btn.disabled && label.includes('反映申請')) {
                 btn.click()
-                return true
+                return { clicked: true, row: 'スタイル掲載情報' }
               }
             }
           }
         }
 
-        // フォールバック: ページ内の最初の有効な反映申請ボタン
-        const allBtns = document.querySelectorAll('input[value="反映申請"], button')
-        for (const btn of allBtns) {
-          if (!btn.disabled && (btn.value?.includes('反映申請') || btn.textContent?.includes('反映申請'))) {
+        // 優先2: ページ内で有効な反映申請ボタンを順に試す
+        const allLinks = document.querySelectorAll('input[type="submit"], button, a')
+        for (const btn of allLinks) {
+          const label = btn.value || btn.textContent || ''
+          if (!btn.disabled && label.includes('反映申請')) {
             btn.click()
-            return true
+            return { clicked: true, row: 'fallback' }
           }
         }
-        return false
+
+        return { clicked: false }
       }
     })
 
@@ -391,19 +442,18 @@ async function logToSupabase(data) {
 // ============================================================
 // ユーティリティ
 // ============================================================
-function waitForTabLoad(tabId, timeout = 30000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('タブ読み込みタイムアウト')), timeout)
-
-    function listener(id, info) {
-      if (id === tabId && info.status === 'complete') {
-        clearTimeout(timer)
-        chrome.tabs.onUpdated.removeListener(listener)
-        setTimeout(resolve, 1000) // 追加で1秒待機
-      }
+async function waitForTabLoad(tabId, timeout = 30000) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null)
+    if (!tab) throw new Error('タブが見つかりません')
+    if (tab.status === 'complete') {
+      await sleep(1500) // DOMが安定するまで追加待機
+      return
     }
-    chrome.tabs.onUpdated.addListener(listener)
-  })
+    await sleep(500)
+  }
+  throw new Error('タブ読み込みタイムアウト')
 }
 
 function sleep(ms) {
