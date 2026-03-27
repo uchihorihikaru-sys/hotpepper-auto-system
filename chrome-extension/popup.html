@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 300px;
+      font-family: -apple-system, 'Hiragino Sans', sans-serif;
+      font-size: 13px;
+      background: #f5f7f5;
+      color: #1a1a1a;
+    }
+    .header {
+      background: #1a4a2e;
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo { font-weight: 700; font-size: 14px; }
+    .sub { font-size: 11px; opacity: 0.8; }
+    .body { padding: 14px; }
+    .status-card {
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .status-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+    .status-value { font-size: 13px; font-weight: 600; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-success { background: #e8f5e9; color: #2e7d32; }
+    .badge-error { background: #ffebee; color: #c62828; }
+    .badge-no_slots { background: #fff3e0; color: #f57c00; }
+    .catch-preview {
+      background: #e8f0eb;
+      border: 1px solid #1a4a2e;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #1a4a2e;
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+    .btn {
+      width: 100%;
+      background: #1a4a2e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+    .btn:hover { background: #2d6b44; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-outline {
+      width: 100%;
+      background: white;
+      color: #1a4a2e;
+      border: 1px solid #1a4a2e;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .toggle-label { font-size: 13px; font-weight: 600; }
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color: #1a4a2e; }
+    .msg { font-size: 11px; color: #666; text-align: center; padding: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">Lay. Catch Board</div>
+      <div class="sub">キャッチコピー自動更新</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div id="lastCatch" class="catch-preview" style="display:none"></div>
+
+    <div class="status-card">
+      <div class="status-label">最終実行</div>
+      <div class="status-value" id="lastRun">-</div>
+    </div>
+    <div class="status-card">
+      <div class="status-label">結果</div>
+      <div class="status-value" id="lastStatus">-</div>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">自動更新</span>
+      <input type="checkbox" id="isActive" checked>
+    </div>
+
+    <button class="btn" id="runNow">今すぐ実行</button>
+    <button class="btn-outline" id="openDashboard">管理画面を開く</button>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

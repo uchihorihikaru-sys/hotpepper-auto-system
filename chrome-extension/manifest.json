@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Lay. Catch Board",
+  "version": "1.0.0",
+  "description": "サロンボード キャッチコピー自動更新システム",
+  "permissions": ["alarms", "tabs", "scripting", "storage"],
+  "host_permissions": [
+    "https://salonboard.com/*",
+    "https://sapeipppwfuezesoadjg.supabase.co/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Lay. Catch Board"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
