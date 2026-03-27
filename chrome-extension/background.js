@@ -71,51 +71,60 @@ async function runUpdate() {
 
     // ============================================================
     // Step1: 実行時間帯に応じたスロット選択ロジック
-    // ・7時〜18時 → 当日の空き枠（2時間以上先のみ有効）
-    // ・19時〜24時 → 翌日の空き枠
-    // ・当日に有効な空き枠がない場合は翌日にフォールバック
+    // ・7時〜18時 → 当日優先（2時間以上先のみ有効）→ なければ翌日以降
+    // ・19時〜24時 → 翌日優先 → なければ翌々日以降
+    // ・空きがなければ最大7日先まで検索 → 「○月○日 ○時」で表示
     // ============================================================
     const now = new Date()
     const hour = now.getHours()
     const nowMinutes = hour * 60 + now.getMinutes()
     const MIN_GAP_MINUTES = 120 // 2時間前まで反映
 
-    const tomorrow = new Date(now)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-
     let selectedSlot = null
     let catchPrefix = '本日'
+    let startDayOffset = 0 // 何日後から探し始めるか
 
     if (hour >= 19) {
-      // 19時〜24時 → 翌日モード
-      availableSlots = await getAvailableSlots(tomorrow)
-      console.log('[Lay. Catch Board] 翌日スロット:', availableSlots)
-      selectedSlot = availableSlots.length > 0 ? availableSlots[0] : null
-      catchPrefix = '明日'
+      // 19時〜24時 → 翌日から探す
+      startDayOffset = 1
+    }
 
-    } else {
-      // 7時〜18時（+ 0時〜6時）→ 当日優先
-      availableSlots = await getAvailableSlots(now)
-      console.log('[Lay. Catch Board] 当日スロット:', availableSlots)
+    // 最大7日先まで空き枠を探す
+    for (let dayOffset = startDayOffset; dayOffset <= 7; dayOffset++) {
+      const targetDate = new Date(now)
+      targetDate.setDate(targetDate.getDate() + dayOffset)
 
-      // 2時間以上先のスロットのみ有効
-      const validToday = availableSlots.filter(slot => {
-        const [h, m] = slot.split(':').map(Number)
-        return (h * 60 + m) - nowMinutes >= MIN_GAP_MINUTES
-      })
+      const slots = await getAvailableSlots(targetDate)
+      console.log(`[Lay. Catch Board] ${dayOffset}日後スロット:`, slots)
 
-      if (validToday.length > 0) {
-        selectedSlot = validToday[0]
-        catchPrefix = '本日'
-        console.log('[Lay. Catch Board] 当日有効スロット:', validToday)
-      } else {
-        // 当日に有効スロットなし → 翌日へフォールバック
-        console.log('[Lay. Catch Board] 当日スロットなし → 翌日を確認')
-        const tomorrowSlots = await getAvailableSlots(tomorrow)
-        availableSlots = tomorrowSlots
-        console.log('[Lay. Catch Board] 翌日スロット:', tomorrowSlots)
-        selectedSlot = tomorrowSlots.length > 0 ? tomorrowSlots[0] : null
-        catchPrefix = '明日'
+      let validSlots = slots
+
+      // 当日（dayOffset=0）のみ2時間制限を適用
+      if (dayOffset === 0) {
+        validSlots = slots.filter(slot => {
+          const [h, m] = slot.split(':').map(Number)
+          return (h * 60 + m) - nowMinutes >= MIN_GAP_MINUTES
+        })
+      }
+
+      if (validSlots.length > 0) {
+        selectedSlot = validSlots[0]
+        availableSlots = validSlots
+
+        // プレフィックス決定
+        if (dayOffset === 0) {
+          catchPrefix = '本日'
+        } else if (dayOffset === 1) {
+          catchPrefix = '明日'
+        } else {
+          // 翌々日以降 → 「○月○日」形式
+          const mo = targetDate.getMonth() + 1
+          const d = targetDate.getDate()
+          catchPrefix = `${mo}/${d}`
+        }
+
+        console.log(`[Lay. Catch Board] 選択スロット: ${catchPrefix} ${selectedSlot}`)
+        break
       }
     }
 
@@ -123,6 +132,8 @@ async function runUpdate() {
     if (selectedSlot) {
       const [h, m] = selectedSlot.split(':').map(Number)
       const timeLabel = m === 0 ? `${h}時` : `${h}時${m}分`
+
+      // 「本日」部分をcatchPrefixに置き換え
       generatedCatch = settings.template
         .replace('本日', catchPrefix)
         .replace('{TIME}', timeLabel)
@@ -135,6 +146,7 @@ async function runUpdate() {
       }
       status = 'success'
     } else {
+      // 7日先まで探して空きなし → フォールバック
       generatedCatch = settings.fallback
       status = 'no_slots'
     }
