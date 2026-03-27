@@ -110,7 +110,7 @@ async function runUpdate() {
     })
 
     // ローカルストレージに最終結果を保存
-    chrome.storage.local.set({
+    await chrome.storage.local.set({
       lastResult: { status, generatedCatch, errorMessage, durationMs },
       lastRun: new Date().toISOString(),
       nextRunTime,
