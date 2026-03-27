@@ -1,0 +1,46 @@
+name: キャッチコピー自動更新
+
+on:
+  schedule:
+    # 毎時0分に実行（JST = UTC+9 なので、9時〜22時 JST = 0時〜13時 UTC）
+    - cron: '0 0-13 * * *'
+  workflow_dispatch:
+    # 管理画面から手動実行も可能
+
+jobs:
+  update-catch:
+    name: キャッチコピー更新
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 依存パッケージインストール
+        run: npm ci
+
+      - name: Playwright ブラウザインストール
+        run: npx playwright install chromium --with-deps
+
+      - name: キャッチコピー更新スクリプト実行
+        env:
+          SALON_BOARD_ID: ${{ secrets.SALON_BOARD_ID }}
+          SALON_BOARD_PASSWORD: ${{ secrets.SALON_BOARD_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node --experimental-vm-modules scripts/update-catch.js
+
+      - name: スクリーンショットをアーティファクトとして保存（エラー時）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: debug-*.png
+          retention-days: 3
