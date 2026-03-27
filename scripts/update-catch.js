@@ -86,12 +86,17 @@ async function main() {
 
     // --- ステップ1: ログイン ---
     console.log('ログイン中...')
-    await page.goto('https://salonboard.com/login/', { waitUntil: 'networkidle' })
+    await page.goto('https://salonboard.com/login/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+
+    // ログインフォームが表示されるまで待機
+    await page.waitForSelector('input[name="userId"], input[name="loginId"], input[type="text"]', { timeout: 10000 })
 
     await page.fill('input[name="userId"]', SALON_ID)
     await page.fill('input[name="password"]', SALON_PASS)
     await page.click('button[type="submit"], input[type="submit"], .btn-login, a:has-text("ログイン")')
-    await page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {})
+
+    // ログイン後のページ遷移を待つ（networkidleではなくURLの変化で判定）
+    await page.waitForURL(url => !url.includes('/login/'), { timeout: 15000 }).catch(() => {})
 
     // ログイン確認
     const currentUrl = page.url()
@@ -112,7 +117,7 @@ async function main() {
 
     let calendarLoaded = false
     for (const url of calendarUrls) {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {})
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {})
       if (!page.url().includes('/login/')) {
         calendarLoaded = true
         console.log('カレンダー読み込み:', page.url())
@@ -159,7 +164,8 @@ async function main() {
 
     // --- ステップ4: サロン掲載情報編集ページでキャッチ更新 ---
     console.log('キャッチコピー更新中...')
-    await page.goto('https://salonboard.com/CNB/draft/salonEdit/', { waitUntil: 'networkidle' })
+    await page.goto('https://salonboard.com/CNB/draft/salonEdit/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForSelector('input, textarea', { timeout: 10000 }).catch(() => {})
 
     // キャッチフィールドを特定して更新
     const catchUpdated = await updateCatchField(page, generatedCatch)
@@ -172,7 +178,8 @@ async function main() {
 
     // --- ステップ5: 反映申請ページで「反映申請」ボタンをクリック ---
     console.log('反映申請中...')
-    await page.goto('https://salonboard.com/CNB/reflect/reflectTop/', { waitUntil: 'networkidle' })
+    await page.goto('https://salonboard.com/CNB/reflect/reflectTop/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForSelector('table, tr', { timeout: 10000 }).catch(() => {})
     const reflected = await clickReflectButton(page)
     if (reflected) {
       console.log('反映申請完了!')
