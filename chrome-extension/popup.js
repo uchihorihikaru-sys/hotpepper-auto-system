@@ -100,6 +100,57 @@ chrome.storage.local.get(['emailjsUserId', 'emailjsServiceId', 'emailjsTemplateI
   }
 })
 
+// テスト送信ボタン（ポップアップから直接EmailJS APIを呼び出す）
+document.getElementById('testEmailjs').addEventListener('click', async () => {
+  const btn = document.getElementById('testEmailjs')
+  const msg = document.getElementById('emailjsTestMsg')
+  btn.disabled = true
+  btn.textContent = '送信中...'
+  msg.style.display = 'none'
+
+  try {
+    const userId    = document.getElementById('emailjsUserId').value.trim()
+    const serviceId = document.getElementById('emailjsServiceId').value.trim()
+    const templateId = document.getElementById('emailjsTemplateId').value.trim()
+
+    if (!userId || !serviceId || !templateId) {
+      throw new Error('User ID / Service ID / Template ID を入力してください')
+    }
+
+    const timeStr = new Date().toLocaleString('ja-JP')
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: userId,
+        template_params: {
+          to_email: 'hika_hika19@yahoo.co.jp',
+          error_time: timeStr,
+          message: '【テスト】サロンボードへのログインに失敗しました。IDとパスワードを更新してください。'
+        }
+      })
+    })
+
+    if (res.ok) {
+      msg.textContent = '✓ テストメールを送信しました！'
+      msg.style.color = '#2e7d32'
+    } else {
+      const text = await res.text()
+      throw new Error(`EmailJS エラー(${res.status}): ${text}`)
+    }
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message
+    msg.style.color = '#c62828'
+  } finally {
+    btn.disabled = false
+    btn.textContent = '📧 テスト送信'
+    msg.style.display = 'block'
+    setTimeout(() => { msg.style.display = 'none' }, 5000)
+  }
+})
+
 // 保存ボタン
 document.getElementById('saveEmailjs').addEventListener('click', () => {
   const userId = document.getElementById('emailjsUserId').value.trim()

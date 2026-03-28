@@ -28,3 +28,5 @@ debug-*.png
 
 # 環境変数
 .env
+.vercel
+.emailjs-config

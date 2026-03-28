@@ -26,9 +26,9 @@ chrome.runtime.onInstalled.addListener(() => {
     }
     // EmailJS設定（未設定の場合のみ初期値をセット）
     if (!result.emailjsUserId) {
-      defaults.emailjsUserId = 'KFVrXmlEuOdqivulj'
+      defaults.emailjsUserId = 'KFVrXmIEuOdqivuIj'
       defaults.emailjsServiceId = 'service_bxoa9nm'
-      defaults.emailjsTemplateId = 'dyki37m'
+      defaults.emailjsTemplateId = 'template_imay9e8'
     }
     if (Object.keys(defaults).length > 0) {
       chrome.storage.local.set(defaults)
@@ -56,15 +56,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })
     return true
   }
+  if (message.action === 'testLoginFailure') {
+    // 1時間dedup解除してからテスト送信
+    chrome.storage.local.remove('lastLoginFailureNotify', () => {
+      notifyLoginFailure().then(() => sendResponse({ success: true })).catch(e => sendResponse({ success: false, error: e.message }))
+    })
+    return true
+  }
 })
 
 // Service Worker起動時にEmailJS設定を確認・補完
 chrome.storage.local.get(['emailjsUserId'], (result) => {
   if (!result.emailjsUserId) {
     chrome.storage.local.set({
-      emailjsUserId: 'KFVrXmlEuOdqivulj',
+      emailjsUserId: 'KFVrXmIEuOdqivuIj',
       emailjsServiceId: 'service_bxoa9nm',
-      emailjsTemplateId: 'dyki37m'
+      emailjsTemplateId: 'template_imay9e8'
     })
     console.log('[Lay. Catch Board] EmailJS設定を自動セットしました')
   }

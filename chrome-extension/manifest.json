@@ -6,7 +6,8 @@
   "permissions": ["alarms", "tabs", "scripting", "storage", "notifications"],
   "host_permissions": [
     "https://salonboard.com/*",
-    "https://sapeipppwfuezesoadjg.supabase.co/*"
+    "https://sapeipppwfuezesoadjg.supabase.co/*",
+    "https://api.emailjs.com/*"
   ],
   "background": {
     "service_worker": "background.js"
