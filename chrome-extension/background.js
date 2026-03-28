@@ -56,7 +56,8 @@ async function runUpdate() {
   let generatedCatch = null
   let nextPredictedCatch = null
   let errorMessage = null
-  const slotsCache = {} // 日付文字列 → スロット配列（タブ再利用のため共有）
+  let variantIndex = 0
+  const slotsCache = {} // 毎回リセット → 常に最新データを取得
 
   try {
     const settings = await getSettings()
@@ -68,22 +69,38 @@ async function runUpdate() {
     const now = new Date()
     console.log('[Lay. Catch Board] 実行開始:', now.toLocaleTimeString('ja-JP'))
 
-    // Step1: 現在時刻基準でキャッチ生成
+    // Step1: 現在時刻基準でキャッチ生成（常に最新スロットをフェッチ）
     const currentResult = await selectBestSlot(now, slotsCache, settings)
-    generatedCatch = currentResult.catchText
+    const baseCatch = currentResult.catchText
     status = currentResult.hasSlot ? 'success' : 'no_slots'
-    console.log('[Lay. Catch Board] 現在のキャッチ:', generatedCatch)
+    console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
 
-    // Step2: 次回実行（+1時間）のキャッチを予測（キャッシュ再利用でタブなし）
+    // Step2: 前回と同一テキストの場合は1文字変えて強制更新
+    const stored = await new Promise(resolve =>
+      chrome.storage.local.get(['lastBaseCatch', 'catchVariantIndex'], resolve)
+    )
+    const lastBaseCatch = stored.lastBaseCatch || ''
+    variantIndex = stored.catchVariantIndex || 0
+
+    if (baseCatch === lastBaseCatch) {
+      variantIndex = (variantIndex % 3) + 1  // 1→2→3→1... と循環
+      generatedCatch = applyVariation(baseCatch, variantIndex)
+      console.log('[Lay. Catch Board] 同一キャッチのため微変更 (variant', variantIndex, '):', generatedCatch)
+    } else {
+      variantIndex = 0
+      generatedCatch = baseCatch
+    }
+
+    // Step3: 次回実行（+1時間）のキャッチを予測（キャッシュ再利用でタブなし）
     const nextRun = new Date(now.getTime() + 60 * 60 * 1000)
     const nextResult = await selectBestSlot(nextRun, slotsCache, settings)
     nextPredictedCatch = nextResult.catchText
     console.log('[Lay. Catch Board] 次回予測キャッチ:', nextPredictedCatch)
 
-    // Step3: サロンボードのキャッチを更新
+    // Step4: サロンボードのキャッチを更新
     await updateCatchOnSalonBoard(generatedCatch)
 
-    // Step4: 反映申請
+    // Step5: 反映申請
     await clickReflectButton()
 
     console.log('[Lay. Catch Board] 更新完了！')
@@ -109,12 +126,14 @@ async function runUpdate() {
       duration_ms: durationMs
     })
 
-    // ローカルストレージに最終結果を保存
+    // ローカルストレージに最終結果を保存（バリアント情報も含む）
     await chrome.storage.local.set({
       lastResult: { status, generatedCatch, errorMessage, durationMs },
       lastRun: new Date().toISOString(),
       nextRunTime,
-      nextPredictedCatch
+      nextPredictedCatch,
+      lastBaseCatch: generatedCatch,
+      catchVariantIndex: variantIndex
     })
 
     console.log(`[Lay. Catch Board] 完了 [${status}] ${durationMs}ms`)
@@ -123,12 +142,19 @@ async function runUpdate() {
 
 // ============================================================
 // スロット選択（キャッシュ付き・最大7日先まで探索）
+// ルール:
+//   - 7:00〜18:59 → 当日の空き / 19:00〜 → 翌日の空き
+//   - 実行時刻 + 2時間 以降の枠のみ反映
+//   - 表示は整時（XX:00）のみ。半端な枠は除外
 // ============================================================
 async function selectBestSlot(referenceTime, slotsCache, settings) {
   const hour = referenceTime.getHours()
   const refMinutes = hour * 60 + referenceTime.getMinutes()
-  const MIN_GAP = 120 // 2時間
   const startDayOffset = hour >= 19 ? 1 : 0 // 19時以降は翌日から
+
+  // 実行時刻 + 2時間 以降の枠のみ反映
+  // 例: 10:00実行 → cutoff=12:00 / 10:30実行 → cutoff=12:30
+  const cutoffHour = refMinutes + 120 // 分単位（cutoff以降の枠を対象）
 
   for (let dayOffset = startDayOffset; dayOffset <= 7; dayOffset++) {
     const targetDate = new Date(referenceTime)
@@ -150,14 +176,17 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
 
     const slots = slotsCache[dateKey]
 
-    // 当日のみ2時間制限を適用
-    let validSlots = slots
-    if (dayOffset === 0) {
-      validSlots = slots.filter(slot => {
-        const [h, m] = slot.split(':').map(Number)
-        return (h * 60 + m) - refMinutes >= MIN_GAP
-      })
-    }
+    // 当日: cutoffHour(分) 以降に限定（翌日以降は全枠対象）
+    const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+
+    const timeFiltered = dayOffset === 0
+      ? slots.filter(s => toMin(s) >= cutoffHour)
+      : [...slots]
+
+    // 連続した空き時間が60分以上ある枠のみを抽出
+    // 例: [12:00, 12:30, 13:00] → 12:00は連続90分 → OK
+    //     [12:30] のみ → 30分のみ → NG
+    const validSlots = filterContinuousHour(timeFiltered)
 
     if (validSlots.length > 0) {
       const selectedSlot = validSlots[0]
@@ -217,59 +246,58 @@ async function getAvailableSlots(date = new Date()) {
 
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       func: () => {
-        const slots = []
-
         try {
-          const table = document.querySelector('table')
-          if (!table) return []
-
-          const rows = table.querySelectorAll('tr')
-          let timeHeaders = []
-          let availableRow = null
+          const rows = document.querySelectorAll('tr')
+          // 30分刻みの時間スロットを展開
+          // 時間ヘッダー行: 「予約を隠す」で始まる行、colspan=2の時間セルを含む
+          let timeSlots = []
+          let availCounts = []
 
           for (const row of rows) {
-            const cells = row.querySelectorAll('th, td')
-            const firstCell = cells[0]?.textContent?.trim() || ''
+            const cells = Array.from(row.querySelectorAll('th, td'))
+            const firstText = (cells[0]?.textContent || '').trim()
 
-            if (firstCell === '' && cells.length > 2) {
-              const possibleTimes = Array.from(cells).map(c => c.textContent.trim())
-              if (possibleTimes.some(t => /^\d{1,2}:\d{2}$/.test(t))) {
-                timeHeaders = possibleTimes
+            // 時間ヘッダー行を探す（"予約を隠す" が最初のセル）
+            if (firstText.includes('予約を隠す') && timeSlots.length === 0) {
+              for (let i = 1; i < cells.length - 1; i++) {
+                const t = cells[i].textContent.trim()
+                const colspan = parseInt(cells[i].getAttribute('colspan') || '1')
+                if (/^\d{1,2}:\d{2}$/.test(t)) {
+                  const [h, m] = t.split(':').map(Number)
+                  timeSlots.push(`${h}:${String(m).padStart(2,'0')}`)
+                  if (colspan >= 2) {
+                    timeSlots.push(`${h}:30`) // 30分スロットを追加
+                  }
+                }
               }
             }
 
-            if (firstCell.includes('残り受付可能数') || firstCell.includes('受付可能')) {
-              availableRow = row
+            // 空き数行: "残り受付数" を含む行（スタッフ個別行は除外）
+            if (firstText.includes('残り受付数') && !firstText.includes('受付可能数：') && availCounts.length === 0) {
+              for (let i = 1; i < cells.length - 1; i++) {
+                const val = parseInt(cells[i].textContent.trim())
+                if (!isNaN(val)) availCounts.push(val)
+              }
             }
           }
 
-          if (availableRow && timeHeaders.length > 0) {
-            const cells = availableRow.querySelectorAll('td')
-            cells.forEach((cell, idx) => {
-              const val = parseInt(cell.textContent.trim())
-              const time = timeHeaders[idx + 1]
-              if (!isNaN(val) && val > 0 && time && /^\d{1,2}:\d{2}$/.test(time)) {
-                slots.push(time)
-              }
-            })
+          // 時間スロットと空き数をマッピング
+          const slots = []
+          for (let i = 0; i < Math.min(timeSlots.length, availCounts.length); i++) {
+            if (availCounts[i] > 0) slots.push(timeSlots[i])
           }
 
-          if (slots.length === 0) {
-            const availableCells = document.querySelectorAll('[data-available="1"], .available, .slot-available')
-            availableCells.forEach(cell => {
-              const time = cell.getAttribute('data-time') || cell.textContent.trim()
-              if (/^\d{1,2}:\d{2}$/.test(time)) {
-                slots.push(time)
-              }
-            })
-          }
+          console.log('[Lay. Catch Board] timeSlots:', timeSlots)
+          console.log('[Lay. Catch Board] availCounts:', availCounts)
+          console.log('[Lay. Catch Board] 空きスロット:', slots)
 
+          return [...new Set(slots)].sort()
         } catch (e) {
           console.error('空き枠取得エラー:', e)
+          return []
         }
-
-        return [...new Set(slots)].sort()
       }
     })
 
@@ -284,27 +312,76 @@ async function getAvailableSlots(date = new Date()) {
 // サロンボードのキャッチを更新
 // ============================================================
 async function updateCatchOnSalonBoard(catchText) {
-  const tab = await chrome.tabs.create({
-    url: 'https://salonboard.com/CNB/draft/salonEdit/',
-    active: false
-  })
+  const EDIT_URL = 'https://salonboard.com/CNB/draft/salonEdit/'
+
+  // salonboard.com上の全タブを検索して既存タブを探す
+  const allTabs = await chrome.tabs.query({ url: 'https://salonboard.com/*' })
+  const editTab = allTabs.find(t => t.url && t.url.includes('/CNB/draft/salonEdit'))
+  let tab = null
+  let isNewTab = false
+
+  if (editTab) {
+    // 既存タブはリロードせずそのまま使用
+    console.log('[Lay. Catch Board] 既存タブをそのまま使用:', editTab.id)
+    tab = editTab
+  } else {
+    console.log('[Lay. Catch Board] 新規タブを作成（フォアグラウンド）')
+    tab = await chrome.tabs.create({ url: EDIT_URL, active: true })
+    isNewTab = true
+    await waitForTabLoad(tab.id)
+    await sleep(3000)
+  }
 
   try {
-    await waitForTabLoad(tab.id)
 
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       func: (text) => {
+        // デバッグ情報
+        const debugInfo = {
+          url: window.location.href,
+          title: document.title,
+          inputCount: document.querySelectorAll('input').length
+        }
+        console.log('[Lay. Catch Board] executeScript実行中:', JSON.stringify(debugInfo))
+
         let catchInput = document.getElementById('idSalonTopCatch')
 
         if (!catchInput) {
           catchInput = document.querySelector('input[name*="catch"], input[name*="Catch"], input[name*="CATCH"]')
         }
 
+        // maxlength=50 のinput（キャッチフィールドの特徴）
         if (!catchInput) {
-          const inputs = document.querySelectorAll('input[type="text"]')
+          catchInput = document.querySelector('input[maxlength="50"]')
+        }
+
+        // textarea版（まれにtextareaの場合）
+        if (!catchInput) {
+          catchInput = document.querySelector('textarea[maxlength="50"]')
+        }
+
+        // ラベル「キャッチ」に近いinput
+        if (!catchInput) {
+          const labels = document.querySelectorAll('label, th, td')
+          for (const label of labels) {
+            if (label.textContent?.includes('キャッチ')) {
+              const row = label.closest('tr')
+              if (row) {
+                catchInput = row.querySelector('input[type="text"], textarea')
+                if (catchInput) break
+              }
+            }
+          }
+        }
+
+        // 既存の値でマッチ（空きあり・営業中・予約など）
+        if (!catchInput) {
+          const inputs = document.querySelectorAll('input[type="text"], textarea')
           for (const input of inputs) {
-            if (input.value?.includes('空きあり') || input.value?.includes('空き') || input.value?.includes('予約')) {
+            const v = input.value || ''
+            if (v.includes('空きあり') || v.includes('営業中') || v.includes('予約がお得')) {
               catchInput = input
               break
             }
@@ -354,7 +431,10 @@ async function updateCatchOnSalonBoard(catchText) {
     await sleep(3000)
 
   } finally {
-    await chrome.tabs.remove(tab.id).catch(() => {})
+    // 新規作成したタブのみ閉じる（既存タブはそのまま）
+    if (isNewTab) {
+      await chrome.tabs.remove(tab.id).catch(() => {})
+    }
   }
 }
 
@@ -362,16 +442,27 @@ async function updateCatchOnSalonBoard(catchText) {
 // 反映申請ボタンをクリック
 // ============================================================
 async function clickReflectButton() {
-  const tab = await chrome.tabs.create({
-    url: 'https://salonboard.com/CNB/reflect/reflectTop/',
-    active: false
-  })
+  const REFLECT_URL = 'https://salonboard.com/CNB/reflect/reflectTop/'
+
+  const allTabs = await chrome.tabs.query({ url: 'https://salonboard.com/CNB/reflect/reflectTop/*' })
+  let tab = allTabs[0] || null
+  let isNewTab = false
+
+  if (tab) {
+    await chrome.tabs.reload(tab.id)
+    await waitForTabLoad(tab.id)
+  } else {
+    tab = await chrome.tabs.create({ url: REFLECT_URL, active: true })
+    isNewTab = true
+    await waitForTabLoad(tab.id)
+  }
 
   try {
-    await waitForTabLoad(tab.id)
+    await sleep(1500)
 
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: 'MAIN',
       func: () => {
         const rows = document.querySelectorAll('tr')
 
@@ -405,7 +496,9 @@ async function clickReflectButton() {
     await sleep(2000)
 
   } finally {
-    await chrome.tabs.remove(tab.id).catch(() => {})
+    if (isNewTab) {
+      await chrome.tabs.remove(tab.id).catch(() => {})
+    }
   }
 }
 
@@ -456,4 +549,61 @@ function countChars(text) {
     count += ch.charCodeAt(0) > 255 ? 1 : 0.5
   }
   return count
+}
+
+// 連続した空き時間が60分以上ある枠の「開始時刻」リストを返す
+// slots: ソート済み時刻文字列配列 ["10:00","10:30","11:00","14:00"]
+// ルール:
+//   - SalonBoardは30分刻みスロット
+//   - 連続2枠以上（60分以上）のブロックのみ有効
+//   - 各ブロックの「最初の時間」だけを返す
+// 例: [13:00, 13:30, 14:00, 15:00] → ブロック1=[13:00〜14:30]→13:00, ブロック2=[15:00]→30分のみNG
+//     [17:00] 単独 → 30分のみ → スキップ
+function filterContinuousHour(slots) {
+  if (slots.length === 0) return []
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+  const sorted = [...slots].sort()
+  const mins = sorted.map(toMin)
+  const SLOT = 30    // SalonBoardは30分刻み
+  const MIN_BLOCK = 60 // 最低1時間（30分スロット×2以上）
+
+  const result = []
+  let i = 0
+
+  while (i < sorted.length) {
+    // 現在位置から連続するブロックを見つける
+    let j = i
+    while (j + 1 < mins.length && mins[j + 1] - mins[j] === SLOT) {
+      j++
+    }
+
+    // ブロック長（分）= スロット数 × 30分
+    const blockDuration = (j - i + 1) * SLOT
+
+    if (blockDuration >= MIN_BLOCK) {
+      // ブロックの最初の時間だけ追加
+      result.push(sorted[i])
+    }
+
+    i = j + 1 // 次のブロックへ
+  }
+
+  return result
+}
+
+// 同一キャッチの場合に1文字だけ変えてサロンボードに「更新」と認識させる
+// variant 1: ◎→〇  variant 2: 〇→◎ + ♪→♩  variant 3: ♩→♪ + ◎→〇
+function applyVariation(text, variantIndex) {
+  switch (variantIndex % 3) {
+    case 1:
+      return text.includes('◎')
+        ? text.replace('◎', '〇')
+        : text + '　'  // ◎がない場合は全角スペースを末尾に（50字以内で）
+    case 2:
+      return text.replace('〇', '◎').replace('♪', '♩')
+    case 0: // = 3 % 3
+      return text.replace('♩', '♪').replace('〇', '◎')
+    default:
+      return text
+  }
 }

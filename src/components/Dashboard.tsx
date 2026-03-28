@@ -202,6 +202,64 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* 実行ルール */}
+      <div className="card">
+        <div className="card-title">実行ルール</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* ① 実行タイミング */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>① 実行タイミング</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              毎時0分に自動実行（Chrome拡張機能）<br />
+              ポップアップの「今すぐ実行」で手動実行も可能
+            </div>
+          </div>
+
+          {/* ② 対象日 */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>② 空き時間の取得対象日</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              <span style={{ background: 'var(--brand-pale)', color: 'var(--brand)', padding: '1px 6px', borderRadius: 4, marginRight: 6, fontSize: 12 }}>7:00〜18:59</span>当日の空き時間を反映<br />
+              <span style={{ background: 'var(--brand-pale)', color: 'var(--brand)', padding: '1px 6px', borderRadius: 4, marginRight: 6, fontSize: 12 }}>19:00〜24:00</span>翌日の空き時間を反映
+            </div>
+          </div>
+
+          {/* ③ フィルタリング */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>③ 空き枠フィルタリング</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9 }}>
+              実行時刻 <strong>+2時間以降</strong> の枠のみ対象<br />
+              　例）10:00実行 → 12:00以降が対象<br />
+              <strong>連続60分以上</strong>の空き枠のみ反映（30分のみの枠はスキップ）<br />
+              連続ブロックの<strong>最初の時間</strong>を表示<br />
+              　例）13:00〜15:30が連続空き → 「本日13時空きあり」
+            </div>
+          </div>
+
+          {/* ④ 空きなし */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>④ 空きなしの場合</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              翌日 → 翌々日 → 最大<strong>7日先</strong>まで自動探索<br />
+              7日先まで空きなし → フォールバックテキストを表示
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: '#f5f5f5', padding: '6px 10px', borderRadius: 6, marginTop: 6 }}>
+              《平日予約がお得◎》[カットカラー¥8800] 海外レイヤーカットやエクステが大人気◎本日も営業中♪
+            </div>
+          </div>
+
+          {/* ⑤ 同一キャッチ */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>⑤ 前回と同じキャッチの場合</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              自動で1文字変更して強制更新（例：◎→〇）
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   )
 }
