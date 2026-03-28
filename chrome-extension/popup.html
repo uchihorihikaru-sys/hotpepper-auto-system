@@ -210,6 +210,32 @@
 
     <hr class="divider">
 
+    <!-- サロンボード ログイン設定（折りたたみ） -->
+    <div class="section-toggle" id="sbToggle">
+      <span class="section-label" style="margin:0">🔑 サロンボード ログイン設定</span>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="settings-panel" id="sbPanel">
+      <div style="font-size:11px;color:#666;margin-bottom:8px;line-height:1.6;">
+        IDとパスワードを保存するとログイン失敗時に自動で再ログインします。
+      </div>
+      <div class="setting-row">
+        <label>ログインID</label>
+        <input type="text" id="sbLoginId" placeholder="サロンボードのID">
+      </div>
+      <div class="setting-row">
+        <label>パスワード</label>
+        <div style="position:relative;">
+          <input type="password" id="sbPassword" placeholder="パスワード" style="padding-right:32px;">
+          <span id="sbPasswordToggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:14px;color:#999;">👁</span>
+        </div>
+      </div>
+      <button class="btn-save" id="saveSb">保存</button>
+      <div class="save-msg" id="sbSaveMsg">✓ 保存しました</div>
+    </div>
+
+    <hr class="divider">
+
     <!-- EmailJS設定（折りたたみ） -->
     <div class="section-toggle" id="emailjsToggle">
       <span class="section-label" style="margin:0">✉ メール通知設定（EmailJS）</span>

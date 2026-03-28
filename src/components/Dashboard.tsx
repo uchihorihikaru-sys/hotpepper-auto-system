@@ -263,12 +263,14 @@ export function Dashboard() {
             <div style={{ fontSize: 13, fontWeight: 700, color: '#c62828', marginBottom: 6 }}>⑥ サロンボードにログインできない場合</div>
             <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
               ログインページへのリダイレクトを自動検知<br />
-              <strong>hika_hika19@yahoo.co.jp</strong> へ通知メールを自動送信<br />
-              Chromeデスクトップ通知も同時に表示<br />
+              <strong>① セッション切れの場合</strong>：保存済みID/PWで自動再ログインして続行<br />
+              <strong>② ID/PWが変わった場合</strong>：自動ログイン失敗を検知<br />
+              　→ <strong>hika_hika19@yahoo.co.jp</strong> へ通知メールを自動送信<br />
+              　→ Chromeデスクトップ通知も同時に表示<br />
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>※ 1時間以内の重複通知はスキップ</span>
             </div>
             <div style={{ fontSize: 12, color: '#c62828', background: '#fff3f3', padding: '6px 10px', borderRadius: 6, marginTop: 6, border: '1px solid #ffcdd2' }}>
-              対応方法：サロンボードのIDとパスワードを更新後、拡張機能ポップアップの「✉ メール通知設定」でEmailJS設定を確認
+              対応方法：拡張機能ポップアップの「🔑 サロンボード ログイン設定」で新しいID/パスワードを更新して「保存」
             </div>
           </div>
 

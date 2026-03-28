@@ -79,6 +79,47 @@ document.getElementById('openDashboard').addEventListener('click', () => {
   chrome.tabs.create({ url: 'https://hotpepper-auto-system.vercel.app' })
 })
 
+// ── サロンボード ログイン設定 ──────────────────
+// 折りたたみトグル
+document.getElementById('sbToggle').addEventListener('click', () => {
+  document.getElementById('sbToggle').classList.toggle('open')
+  document.getElementById('sbPanel').classList.toggle('open')
+})
+
+// 保存済み値を読み込む
+chrome.storage.local.get(['sbLoginId', 'sbPassword'], (data) => {
+  if (data.sbLoginId) document.getElementById('sbLoginId').value = data.sbLoginId
+  if (data.sbPassword) document.getElementById('sbPassword').value = data.sbPassword
+  if (data.sbLoginId || data.sbPassword) {
+    document.getElementById('sbToggle').classList.add('open')
+    document.getElementById('sbPanel').classList.add('open')
+  }
+})
+
+// パスワード表示/非表示トグル
+document.getElementById('sbPasswordToggle').addEventListener('click', () => {
+  const input = document.getElementById('sbPassword')
+  const toggle = document.getElementById('sbPasswordToggle')
+  if (input.type === 'password') {
+    input.type = 'text'
+    toggle.textContent = '🙈'
+  } else {
+    input.type = 'password'
+    toggle.textContent = '👁'
+  }
+})
+
+// 保存ボタン
+document.getElementById('saveSb').addEventListener('click', () => {
+  const loginId = document.getElementById('sbLoginId').value.trim()
+  const password = document.getElementById('sbPassword').value
+  chrome.storage.local.set({ sbLoginId: loginId, sbPassword: password }, () => {
+    const saveMsg = document.getElementById('sbSaveMsg')
+    saveMsg.style.display = 'block'
+    setTimeout(() => { saveMsg.style.display = 'none' }, 2000)
+  })
+})
+
 // ── EmailJS設定 ──────────────────────────────
 // 折りたたみトグル
 document.getElementById('emailjsToggle').addEventListener('click', () => {

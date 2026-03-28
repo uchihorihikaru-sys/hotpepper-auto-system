@@ -77,6 +77,62 @@ chrome.storage.local.get(['emailjsUserId'], (result) => {
   }
 })
 
+// ============================================================
+// サロンボード 自動ログイン
+// ============================================================
+async function tryAutoLogin(tabId, loginId, password) {
+  try {
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: (id, pw) => {
+        const idInput = document.querySelector('input[name="LOGIN_ID"], input[type="text"][name*="id"], input[type="text"][name*="ID"], #LOGIN_ID')
+        const pwInput = document.querySelector('input[type="password"]')
+        if (!idInput || !pwInput) return { success: false, error: 'ログインフォームが見つかりません' }
+
+        idInput.value = id
+        idInput.dispatchEvent(new Event('input', { bubbles: true }))
+        pwInput.value = pw
+        pwInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+        const submitBtn = document.querySelector('input[type="submit"], button[type="submit"], a[onclick*="login"], a[onclick*="Login"]')
+        if (submitBtn) {
+          submitBtn.click()
+          return { success: true }
+        }
+        const form = idInput.closest('form')
+        if (form) { form.submit(); return { success: true } }
+        return { success: false, error: '送信ボタンが見つかりません' }
+      },
+      args: [loginId, password]
+    })
+
+    if (!result[0]?.result?.success) return false
+
+    // ページ遷移を待つ（最大10秒）
+    for (let i = 0; i < 20; i++) {
+      await sleep(500)
+      const info = await chrome.tabs.get(tabId)
+      const url = info.url || ''
+      if (url.includes('salonboard.com/CNB/') && !url.includes('/login') && !url.includes('/Login')) return true
+      // ログインエラーページ（IDかPWが違う）
+      if (url.includes('login') || url.includes('Login')) {
+        const html = await chrome.scripting.executeScript({
+          target: { tabId },
+          world: 'MAIN',
+          func: () => document.body?.innerText || ''
+        })
+        const text = html[0]?.result || ''
+        if (text.includes('パスワード') || text.includes('エラー') || text.includes('違い')) return false
+      }
+    }
+    return false
+  } catch (e) {
+    console.error('[Lay. Catch Board] 自動ログインエラー:', e)
+    return false
+  }
+}
+
 // 通知クリック → メール作成画面を開く
 chrome.notifications.onClicked.addListener((notificationId) => {
   if (notificationId === 'loginFailed') {
@@ -448,13 +504,35 @@ async function updateCatchOnSalonBoard(catchText) {
   const tabInfo = await chrome.tabs.get(tab.id)
   const actualUrl = tabInfo.url || ''
   if (!actualUrl.includes('salonboard.com/CNB/draft/salonEdit')) {
-    if (actualUrl.includes('/login') || actualUrl.includes('/Login') || actualUrl.includes('login.do') || actualUrl.includes('Login.do')) {
+    const isLoginPage = actualUrl.includes('/login') || actualUrl.includes('/Login') || actualUrl.includes('login.do') || actualUrl.includes('Login.do')
+    if (isLoginPage) {
+      // 保存済みID/PWで自動再ログイン試みる
+      const creds = await new Promise(resolve => chrome.storage.local.get(['sbLoginId', 'sbPassword'], resolve))
+      if (creds.sbLoginId && creds.sbPassword) {
+        console.log('[Lay. Catch Board] 自動再ログイン試みます')
+        const loginSuccess = await tryAutoLogin(tab.id, creds.sbLoginId, creds.sbPassword)
+        if (loginSuccess) {
+          // ログイン成功 → 編集ページへ移動
+          await chrome.tabs.update(tab.id, { url: EDIT_URL })
+          await waitForTabLoad(tab.id)
+          await sleep(2000)
+          isNewTab = true // ログイン後タブは処理後に閉じる
+        } else {
+          // ログイン失敗 → パスワードが変わった
+          if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
+          await notifyLoginFailure()
+          throw new Error('サロンボードのログインに失敗しました。ID/パスワードを更新してください。')
+        }
+      } else {
+        // ID/PW未設定 → メール通知のみ
+        if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
+        await notifyLoginFailure()
+        throw new Error('サロンボードのセッションが切れています。ログインしてください。')
+      }
+    } else {
       if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
-      await notifyLoginFailure()
-      throw new Error('サロンボードのセッションが切れています。ログインしてください。')
+      throw new Error(`ページが正しく読み込まれませんでした: ${actualUrl}`)
     }
-    if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
-    throw new Error(`ページが正しく読み込まれませんでした: ${actualUrl}`)
   }
 
   try {
