@@ -17,13 +17,21 @@ chrome.runtime.onInstalled.addListener(() => {
   })
   console.log('[Lay. Catch Board] インストール完了。毎時0分に自動実行します。')
 
-  chrome.storage.local.get(['template', 'fallback', 'isActive'], (result) => {
+  chrome.storage.local.get(['template', 'fallback', 'isActive', 'emailjsUserId'], (result) => {
+    const defaults = {}
     if (!result.template) {
-      chrome.storage.local.set({
-        template: '【本日{TIME}空きあり】《平日予約がお得◎》[カットカラー¥8800] 海外レイヤーカットやエクステが大人気◎',
-        fallback: '《平日予約がお得◎》[カットカラー¥8800] 海外レイヤーカットやエクステが大人気◎本日も営業中♪',
-        isActive: true
-      })
+      defaults.template = '【本日{TIME}空きあり】《平日予約がお得◎》[カットカラー¥8800] 海外レイヤーカットやエクステが大人気◎'
+      defaults.fallback = '《平日予約がお得◎》[カットカラー¥8800] 海外レイヤーカットやエクステが大人気◎本日も営業中♪'
+      defaults.isActive = true
+    }
+    // EmailJS設定（未設定の場合のみ初期値をセット）
+    if (!result.emailjsUserId) {
+      defaults.emailjsUserId = 'KFVrXmlEuOdqivulj'
+      defaults.emailjsServiceId = 'service_bxoa9nm'
+      defaults.emailjsTemplateId = 'dyki37m'
+    }
+    if (Object.keys(defaults).length > 0) {
+      chrome.storage.local.set(defaults)
     }
   })
 })
@@ -47,6 +55,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(result)
     })
     return true
+  }
+})
+
+// Service Worker起動時にEmailJS設定を確認・補完
+chrome.storage.local.get(['emailjsUserId'], (result) => {
+  if (!result.emailjsUserId) {
+    chrome.storage.local.set({
+      emailjsUserId: 'KFVrXmlEuOdqivulj',
+      emailjsServiceId: 'service_bxoa9nm',
+      emailjsTemplateId: 'dyki37m'
+    })
+    console.log('[Lay. Catch Board] EmailJS設定を自動セットしました')
   }
 })
 
