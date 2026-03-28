@@ -6,6 +6,9 @@
 const SUPABASE_URL = 'https://sapeipppwfuezesoadjg.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcGVpcHBwd2Z1ZXplc29hZGpnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDI2NjAsImV4cCI6MjA5MDExODY2MH0.fusS-pw1thAHOcVxjFlFEAWHeP9zN4Q4BoN4TJ9qfv4'
 
+// 通知メール送信先（固定）
+const NOTIFY_EMAIL = 'hika_hika19@yahoo.co.jp'
+
 // インストール時: 毎時0分のアラームを設定
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('updateCatch', {
@@ -46,6 +49,88 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 })
+
+// 通知クリック → メール作成画面を開く
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId === 'loginFailed') {
+    const subject = encodeURIComponent('【Lay. Catch Board】サロンボードのログイン情報を更新してください')
+    const body = encodeURIComponent(
+      'サロンボードへのログインに失敗しました。\n\n' +
+      'IDまたはパスワードが変更されている可能性があります。\n' +
+      'Chrome拡張機能の設定からログイン情報を更新してください。\n\n' +
+      '送信時刻: ' + new Date().toLocaleString('ja-JP')
+    )
+    chrome.tabs.create({ url: `mailto:${NOTIFY_EMAIL}?subject=${subject}&body=${body}` })
+    chrome.notifications.clear('loginFailed')
+  }
+})
+
+// ============================================================
+// ログイン失敗を検知してメール通知（1時間に1回まで）
+// ============================================================
+async function notifyLoginFailure() {
+  // 1時間以内に通知済みならスキップ
+  const stored = await new Promise(resolve =>
+    chrome.storage.local.get(['lastLoginFailureNotify'], resolve)
+  )
+  const lastNotify = stored.lastLoginFailureNotify || 0
+  const now = Date.now()
+  if (now - lastNotify < 60 * 60 * 1000) {
+    console.log('[Lay. Catch Board] ログイン失敗通知: 1時間以内に送信済みのためスキップ')
+    return
+  }
+
+  // 最終通知時刻を保存
+  await chrome.storage.local.set({ lastLoginFailureNotify: now })
+
+  const timeStr = new Date().toLocaleString('ja-JP')
+  console.log('[Lay. Catch Board] ログイン失敗通知を送信します')
+
+  // ① Chromeデスクトップ通知
+  chrome.notifications.create('loginFailed', {
+    type: 'basic',
+    iconUrl: 'icon48.png',
+    title: '⚠️ サロンボード ログインエラー',
+    message: 'ログインできません。IDとパスワードの更新が必要です。クリックしてメールを作成。',
+    priority: 2
+  })
+
+  // ② EmailJS経由で自動メール送信（設定済みの場合）
+  const emailSettings = await new Promise(resolve =>
+    chrome.storage.local.get(['emailjsUserId', 'emailjsServiceId', 'emailjsTemplateId'], resolve)
+  )
+
+  if (emailSettings.emailjsUserId && emailSettings.emailjsServiceId && emailSettings.emailjsTemplateId) {
+    try {
+      await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_id: emailSettings.emailjsServiceId,
+          template_id: emailSettings.emailjsTemplateId,
+          user_id: emailSettings.emailjsUserId,
+          template_params: {
+            to_email: NOTIFY_EMAIL,
+            error_time: timeStr,
+            message: 'サロンボードへのログインに失敗しました。IDとパスワードを更新してください。'
+          }
+        })
+      })
+      console.log('[Lay. Catch Board] ログイン失敗メール送信完了')
+    } catch (e) {
+      console.error('[Lay. Catch Board] メール送信エラー:', e)
+    }
+  }
+
+  // SupabaseにもログINできないことをlLogin_failedとして記録
+  await logToSupabase({
+    status: 'error',
+    available_slots: null,
+    generated_catch: null,
+    error_message: `ログイン失敗: ${timeStr} / ${NOTIFY_EMAIL}に通知済み`,
+    duration_ms: 0
+  })
+}
 
 // ============================================================
 // メイン処理
@@ -330,6 +415,19 @@ async function updateCatchOnSalonBoard(catchText) {
     isNewTab = true
     await waitForTabLoad(tab.id)
     await sleep(3000)
+  }
+
+  // URLを確認してログイン状態をチェック
+  const tabInfo = await chrome.tabs.get(tab.id)
+  const actualUrl = tabInfo.url || ''
+  if (!actualUrl.includes('salonboard.com/CNB/draft/salonEdit')) {
+    if (actualUrl.includes('/login') || actualUrl.includes('/Login') || actualUrl.includes('login.do') || actualUrl.includes('Login.do')) {
+      if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
+      await notifyLoginFailure()
+      throw new Error('サロンボードのセッションが切れています。ログインしてください。')
+    }
+    if (isNewTab) await chrome.tabs.remove(tab.id).catch(() => {})
+    throw new Error(`ページが正しく読み込まれませんでした: ${actualUrl}`)
   }
 
   try {

@@ -78,3 +78,41 @@ document.getElementById('runNow').addEventListener('click', () => {
 document.getElementById('openDashboard').addEventListener('click', () => {
   chrome.tabs.create({ url: 'https://hotpepper-auto-system.vercel.app' })
 })
+
+// ── EmailJS設定 ──────────────────────────────
+// 折りたたみトグル
+document.getElementById('emailjsToggle').addEventListener('click', () => {
+  const toggle = document.getElementById('emailjsToggle')
+  const panel = document.getElementById('emailjsPanel')
+  toggle.classList.toggle('open')
+  panel.classList.toggle('open')
+})
+
+// 保存済み値を読み込む
+chrome.storage.local.get(['emailjsUserId', 'emailjsServiceId', 'emailjsTemplateId'], (data) => {
+  if (data.emailjsUserId) document.getElementById('emailjsUserId').value = data.emailjsUserId
+  if (data.emailjsServiceId) document.getElementById('emailjsServiceId').value = data.emailjsServiceId
+  if (data.emailjsTemplateId) document.getElementById('emailjsTemplateId').value = data.emailjsTemplateId
+  // 設定済みならパネルを開く
+  if (data.emailjsUserId || data.emailjsServiceId || data.emailjsTemplateId) {
+    document.getElementById('emailjsToggle').classList.add('open')
+    document.getElementById('emailjsPanel').classList.add('open')
+  }
+})
+
+// 保存ボタン
+document.getElementById('saveEmailjs').addEventListener('click', () => {
+  const userId = document.getElementById('emailjsUserId').value.trim()
+  const serviceId = document.getElementById('emailjsServiceId').value.trim()
+  const templateId = document.getElementById('emailjsTemplateId').value.trim()
+
+  chrome.storage.local.set({
+    emailjsUserId: userId,
+    emailjsServiceId: serviceId,
+    emailjsTemplateId: templateId
+  }, () => {
+    const saveMsg = document.getElementById('emailjsSaveMsg')
+    saveMsg.style.display = 'block'
+    setTimeout(() => { saveMsg.style.display = 'none' }, 2000)
+  })
+})

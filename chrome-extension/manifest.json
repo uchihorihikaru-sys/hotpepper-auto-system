@@ -3,7 +3,7 @@
   "name": "Lay. Catch Board",
   "version": "1.0.0",
   "description": "サロンボード キャッチコピー自動更新システム",
-  "permissions": ["alarms", "tabs", "scripting", "storage"],
+  "permissions": ["alarms", "tabs", "scripting", "storage", "notifications"],
   "host_permissions": [
     "https://salonboard.com/*",
     "https://sapeipppwfuezesoadjg.supabase.co/*"

@@ -125,6 +125,53 @@
     }
     .msg { font-size: 11px; color: #666; text-align: center; padding: 6px 0; }
     .divider { border: none; border-top: 1px solid #e8ede9; margin: 10px 0; }
+
+    /* EmailJS設定 */
+    .section-toggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 2px;
+      margin-bottom: 6px;
+    }
+    .section-toggle .arrow { font-size: 10px; color: #999; transition: transform 0.2s; }
+    .section-toggle.open .arrow { transform: rotate(180deg); }
+    .settings-panel {
+      display: none;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .settings-panel.open { display: block; }
+    .setting-row { margin-bottom: 8px; }
+    .setting-row label { display: block; font-size: 10px; color: #666; margin-bottom: 3px; }
+    .setting-row input {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+    }
+    .setting-row input:focus { border-color: #1a4a2e; }
+    .btn-save {
+      width: 100%;
+      background: #e8f0eb;
+      color: #1a4a2e;
+      border: 1px solid #1a4a2e;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-save:hover { background: #d0e4d7; }
+    .save-msg { font-size: 10px; color: #2e7d32; text-align: center; margin-top: 4px; display: none; }
   </style>
 </head>
 <body>
@@ -160,6 +207,30 @@
     <button class="btn-outline" id="openDashboard">管理画面を開く</button>
 
     <div class="msg" id="msg"></div>
+
+    <hr class="divider">
+
+    <!-- EmailJS設定（折りたたみ） -->
+    <div class="section-toggle" id="emailjsToggle">
+      <span class="section-label" style="margin:0">✉ メール通知設定（EmailJS）</span>
+      <span class="arrow">▼</span>
+    </div>
+    <div class="settings-panel" id="emailjsPanel">
+      <div class="setting-row">
+        <label>User ID（Public Key）</label>
+        <input type="text" id="emailjsUserId" placeholder="例: user_xxxxxxxxxxxxxxx">
+      </div>
+      <div class="setting-row">
+        <label>Service ID</label>
+        <input type="text" id="emailjsServiceId" placeholder="例: service_xxxxxxx">
+      </div>
+      <div class="setting-row">
+        <label>Template ID</label>
+        <input type="text" id="emailjsTemplateId" placeholder="例: template_xxxxxxx">
+      </div>
+      <button class="btn-save" id="saveEmailjs">保存</button>
+      <div class="save-msg" id="emailjsSaveMsg">✓ 保存しました</div>
+    </div>
   </div>
 
   <script src="popup.js"></script>
