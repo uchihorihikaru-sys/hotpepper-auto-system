@@ -365,20 +365,18 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
       else if (dayOffset === 1) catchPrefix = '明日'
       else catchPrefix = `${targetDate.getMonth() + 1}/${targetDate.getDate()}`
 
-      // キャッチ生成
+      // キャッチ生成（50文字制限に合わせて段階的に短縮）
       const [h, m] = selectedSlot.split(':').map(Number)
       const timeLabel = m === 0 ? `${h}時` : `${h}時${m}分`
-      let catchText = settings.template.replace('本日', catchPrefix).replace('{TIME}', timeLabel)
-      if (countChars(catchText) > 50) {
-        catchText = settings.template.replace('本日', catchPrefix).replace('{TIME}', `${h}時`)
-      }
+      let catchText = fitToLimit(settings.template, catchPrefix, timeLabel, h)
 
       return { catchText, hasSlot: true, slot: selectedSlot, prefix: catchPrefix }
     }
   }
 
   // 7日先まで空きなし
-  return { catchText: settings.fallback, hasSlot: false, slot: null, prefix: null }
+  const fallback = settings.fallback.slice(0, 50)
+  return { catchText: fallback, hasSlot: false, slot: null, prefix: null }
 }
 
 // ============================================================
@@ -747,11 +745,25 @@ function sleep(ms) {
 }
 
 function countChars(text) {
-  let count = 0
-  for (const ch of text) {
-    count += ch.charCodeAt(0) > 255 ? 1 : 0.5
-  }
-  return count
+  return text.length
+}
+
+// 50文字制限に収まるよう段階的に短縮
+// ① フル（例: 10時30分）→ ② 時のみ（例: 10時）→ ③ 末尾を切り捨て
+function fitToLimit(template, prefix, timeLabel, h) {
+  const LIMIT = 50
+
+  // ① まずフルの時刻で試す
+  let text = template.replace('本日', prefix).replace('{TIME}', timeLabel)
+  if (text.length <= LIMIT) return text
+
+  // ② 「○時」のみ（分を省略）
+  text = template.replace('本日', prefix).replace('{TIME}', `${h}時`)
+  if (text.length <= LIMIT) return text
+
+  // ③ テンプレートの後半を削って50文字に収める
+  text = template.replace('本日', prefix).replace('{TIME}', `${h}時`)
+  return text.slice(0, LIMIT)
 }
 
 // 連続した空き時間が60分以上ある枠の「開始時刻」リストを返す
