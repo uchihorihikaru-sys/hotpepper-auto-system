@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS execution_logs (
   available_slots TEXT[],
   generated_catch TEXT,
   error_message TEXT,
-  duration_ms INTEGER
+  duration_ms INTEGER,
+  target_date_label TEXT  -- 本日 / 明日 / 3月31日 など
 );
 
 -- RLS有効化

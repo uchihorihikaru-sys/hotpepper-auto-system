@@ -238,6 +238,17 @@ export function Dashboard() {
             </div>
           </div>
 
+          {/* ③-b 日付表示形式 */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>③-b 日付の表示形式</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.9 }}>
+              当日の空きは <strong>「本日」</strong>、翌日は <strong>「明日」</strong>、それ以降は <strong>「〇月〇日」</strong> 形式で表示<br />
+              　例）当日 → 【本日16時空きあり】<br />
+              　例）翌日 → 【明日10時空きあり】<br />
+              　例）2日以降 → 【3月31日16時空きあり】
+            </div>
+          </div>
+
           {/* ④ 空きなし */}
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>④ 空きなしの場合</div>

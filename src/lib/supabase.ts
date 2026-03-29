@@ -22,4 +22,5 @@ export type ExecutionLog = {
   generated_catch: string | null
   error_message: string | null
   duration_ms: number | null
+  target_date_label: string | null  // 本日 / 明日 / 3月31日 など
 }

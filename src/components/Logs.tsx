@@ -63,6 +63,7 @@ export function Logs() {
               <tr style={{ background: 'var(--brand-pale)' }}>
                 <th style={thStyle}>実行日時</th>
                 <th style={thStyle}>結果</th>
+                <th style={thStyle}>対象日</th>
                 <th style={thStyle}>生成キャッチ</th>
                 <th style={thStyle}>空き枠</th>
                 <th style={thStyle}>処理時間</th>
@@ -73,6 +74,12 @@ export function Logs() {
                 <tr key={log.id} style={{ background: i % 2 === 0 ? 'white' : '#fafafa' }}>
                   <td style={tdStyle}>{formatTime(log.executed_at)}</td>
                   <td style={tdStyle}>{statusBadge(log.status)}</td>
+                  <td style={{ ...tdStyle, fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {log.target_date_label
+                      ? <span style={{ fontWeight: 600, color: 'var(--brand)' }}>{log.target_date_label}</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>-</span>
+                    }
+                  </td>
                   <td style={{ ...tdStyle, maxWidth: 300, fontSize: 12 }}>
                     {log.generated_catch || (
                       log.error_message

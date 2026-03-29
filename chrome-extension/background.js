@@ -233,6 +233,7 @@ async function runUpdate() {
   let nextPredictedCatch = null
   let errorMessage = null
   let variantIndex = 0
+  let foundSlots = null // ログ保存用（実際に取得したスロット）
   const slotsCache = {} // 毎回リセット → 常に最新データを取得
 
   try {
@@ -247,6 +248,8 @@ async function runUpdate() {
 
     // Step1: 現在時刻基準でキャッチ生成（常に最新スロットをフェッチ）
     const currentResult = await selectBestSlot(now, slotsCache, settings)
+    // フェッチした全スロットをログ用に収集
+    foundSlots = Object.values(slotsCache).flat()
     const baseCatch = currentResult.catchText
     status = currentResult.hasSlot ? 'success' : 'no_slots'
     console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
@@ -293,13 +296,14 @@ async function runUpdate() {
       ? new Date(nextAlarm.scheduledTime).toISOString()
       : null
 
-    // Supabaseにログ保存
+    // Supabaseにログ保存（available_slots に実際のスロットデータを記録）
     await logToSupabase({
       status,
-      available_slots: null,
+      available_slots: foundSlots && foundSlots.length > 0 ? foundSlots : null,
       generated_catch: generatedCatch,
       error_message: errorMessage,
-      duration_ms: durationMs
+      duration_ms: durationMs,
+      target_date_label: currentResult?.prefix || null
     })
 
     // ローカルストレージに最終結果を保存（バリアント情報も含む）
@@ -344,7 +348,13 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
 
     // キャッシュになければフェッチ（タブ開く）、あれば再利用
     if (slotsCache[dateKey] === undefined) {
-      slotsCache[dateKey] = await getAvailableSlots(targetDate)
+      try {
+        slotsCache[dateKey] = await getAvailableSlots(targetDate)
+      } catch (e) {
+        // 1日の取得失敗は致命的エラーにしない → 空配列として次の日付を試す
+        console.warn(`[Lay. Catch Board] ${dateKey} スロット取得失敗（スキップ）:`, e.message)
+        slotsCache[dateKey] = []
+      }
       console.log(`[Lay. Catch Board] フェッチ ${dateKey}:`, slotsCache[dateKey])
     } else {
       console.log(`[Lay. Catch Board] キャッシュ使用 ${dateKey}`)
@@ -371,7 +381,7 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
       let catchPrefix
       if (dayOffset === 0) catchPrefix = '本日'
       else if (dayOffset === 1) catchPrefix = '明日'
-      else catchPrefix = `${targetDate.getMonth() + 1}/${targetDate.getDate()}`
+      else catchPrefix = `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`
 
       // キャッチ生成（50文字制限に合わせて段階的に短縮）
       const [h, m] = selectedSlot.split(':').map(Number)
@@ -450,14 +460,20 @@ async function getAvailableSlots(date = new Date()) {
   try {
     await waitForTabLoad(tab.id)
 
+    // ログインページへのリダイレクトを検知（セッション切れ対策）
+    const tabInfo = await chrome.tabs.get(tab.id).catch(() => null)
+    const actualUrl = tabInfo?.url || ''
+    if (actualUrl.includes('/login') || actualUrl.includes('/Login') || actualUrl.includes('login.do')) {
+      console.warn(`[Lay. Catch Board] ${dateStr}: ログインページにリダイレクトされました（セッション切れ）`)
+      return []
+    }
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       world: 'MAIN',
       func: () => {
         try {
           const rows = document.querySelectorAll('tr')
-          // 30分刻みの時間スロットを展開
-          // 時間ヘッダー行: 「予約を隠す」で始まる行、colspan=2の時間セルを含む
           let timeSlots = []
           let availCounts = []
 
@@ -473,8 +489,9 @@ async function getAvailableSlots(date = new Date()) {
                 if (/^\d{1,2}:\d{2}$/.test(t)) {
                   const [h, m] = t.split(':').map(Number)
                   timeSlots.push(`${h}:${String(m).padStart(2,'0')}`)
-                  if (colspan >= 2) {
-                    timeSlots.push(`${h}:30`) // 30分スロットを追加
+                  if (colspan >= 2 && m === 0) {
+                    // colspan=2 かつ XX:00 の場合のみ :30 を追加（XX:30 の重複防止）
+                    timeSlots.push(`${h}:30`)
                   }
                 }
               }
@@ -495,19 +512,25 @@ async function getAvailableSlots(date = new Date()) {
             if (availCounts[i] > 0) slots.push(timeSlots[i])
           }
 
-          console.log('[Lay. Catch Board] timeSlots:', timeSlots)
-          console.log('[Lay. Catch Board] availCounts:', availCounts)
-          console.log('[Lay. Catch Board] 空きスロット:', slots)
-
-          return [...new Set(slots)].sort()
+          return {
+            slots: [...new Set(slots)].sort(),
+            _debug: { timeSlots, availCounts, url: window.location.href }
+          }
         } catch (e) {
-          console.error('空き枠取得エラー:', e)
-          return []
+          return { slots: [], _debug: { error: e.message } }
         }
       }
     })
 
-    return results[0]?.result || []
+    const res = results[0]?.result
+    // デバッグ情報をService Workerのコンソールに出力
+    if (res?._debug) {
+      const d = res._debug
+      console.log(`[Lay. Catch Board] ${dateStr} DOM解析: timeSlots=${d.timeSlots?.length ?? '?'} availCounts=${d.availCounts?.length ?? '?'} 空き=${res.slots?.length ?? 0}`, res.slots)
+      if (d.error) console.warn(`[Lay. Catch Board] ${dateStr} DOM解析エラー:`, d.error)
+    }
+
+    return res?.slots || []
 
   } finally {
     await chrome.tabs.remove(tab.id).catch(() => {})
@@ -772,6 +795,10 @@ async function waitForTabLoad(tabId, timeout = 30000) {
     const tab = await chrome.tabs.get(tabId).catch(() => null)
     if (!tab) throw new Error('タブが見つかりません')
     if (tab.status === 'complete') {
+      // chrome-error:// はサーバー接続失敗のエラーページ → executeScript が失敗するため早期検知
+      if (tab.url && tab.url.startsWith('chrome-error://')) {
+        throw new Error('サーバーに接続できませんでした（ネットワークエラー）')
+      }
       await sleep(1500)
       return
     }
