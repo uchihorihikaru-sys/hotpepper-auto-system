@@ -112,18 +112,26 @@ async function tryAutoLogin(tabId, loginId, password) {
     // ページ遷移を待つ（最大10秒）
     for (let i = 0; i < 20; i++) {
       await sleep(500)
-      const info = await chrome.tabs.get(tabId)
-      const url = info.url || ''
-      if (url.includes('salonboard.com/CNB/') && !url.includes('/login') && !url.includes('/Login')) return true
-      // ログインエラーページ（IDかPWが違う）
-      if (url.includes('login') || url.includes('Login')) {
-        const html = await chrome.scripting.executeScript({
-          target: { tabId },
-          world: 'MAIN',
-          func: () => document.body?.innerText || ''
-        })
-        const text = html[0]?.result || ''
-        if (text.includes('パスワード') || text.includes('エラー') || text.includes('違い')) return false
+      try {
+        const info = await chrome.tabs.get(tabId)
+        const url = info.url || ''
+        if (url.includes('salonboard.com/CNB/') && !url.includes('/login') && !url.includes('/Login')) return true
+        // エラーページならあきらめる
+        if (url.startsWith('chrome-error://') || url === '') break
+        // ログインエラーページ（IDかPWが違う）→ 即失敗
+        if (url.includes('login') || url.includes('Login')) {
+          try {
+            const html = await chrome.scripting.executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: () => document.body?.innerText || ''
+            })
+            const text = html[0]?.result || ''
+            if (text.includes('パスワード') || text.includes('エラー') || text.includes('違い')) return false
+          } catch (_) { /* executeScriptエラーは無視 */ }
+        }
+      } catch (_) {
+        break // タブが消えた or エラーページ → ループ終了
       }
     }
     return false
@@ -527,7 +535,7 @@ async function updateCatchOnSalonBoard(catchText) {
     tab = await chrome.tabs.create({ url: EDIT_URL, active: true })
     isNewTab = true
     await waitForTabLoad(tab.id)
-    await sleep(3000)
+    await sleep(4000)
   }
 
   // URLを確認してログイン状態をチェック
