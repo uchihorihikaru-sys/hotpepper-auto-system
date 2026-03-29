@@ -234,6 +234,7 @@ async function runUpdate() {
   let errorMessage = null
   let variantIndex = 0
   let foundSlots = null // ログ保存用（実際に取得したスロット）
+  let targetDateLabel = null // ログ保存用（本日/明日/3月31日など）
   const slotsCache = {} // 毎回リセット → 常に最新データを取得
 
   try {
@@ -250,6 +251,7 @@ async function runUpdate() {
     const currentResult = await selectBestSlot(now, slotsCache, settings)
     // フェッチした全スロットをログ用に収集
     foundSlots = Object.values(slotsCache).flat()
+    targetDateLabel = currentResult.prefix || null // ログ保存用に退避
     const baseCatch = currentResult.catchText
     status = currentResult.hasSlot ? 'success' : 'no_slots'
     console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
@@ -303,7 +305,7 @@ async function runUpdate() {
       generated_catch: generatedCatch,
       error_message: errorMessage,
       duration_ms: durationMs,
-      target_date_label: currentResult?.prefix || null
+      target_date_label: targetDateLabel
     })
 
     // ローカルストレージに最終結果を保存（バリアント情報も含む）
