@@ -749,7 +749,7 @@ function countChars(text) {
 }
 
 // 50文字制限に収まるよう段階的に短縮
-// ① フル（例: 10時30分）→ ② 時のみ（例: 10時）→ ③ 末尾を切り捨て
+// 時間は正確に保ちつつ、装飾文字から順に削除
 function fitToLimit(template, prefix, timeLabel, h) {
   const LIMIT = 50
 
@@ -757,12 +757,26 @@ function fitToLimit(template, prefix, timeLabel, h) {
   let text = template.replace('本日', prefix).replace('{TIME}', timeLabel)
   if (text.length <= LIMIT) return text
 
-  // ② 「○時」のみ（分を省略）
-  text = template.replace('本日', prefix).replace('{TIME}', `${h}時`)
-  if (text.length <= LIMIT) return text
+  // ② 装飾文字を段階的に削除（意味への影響が少ない順）
+  const steps = [
+    // 絵文字・記号類（◎○◯★☆♪♡♥✨💫⭐🌟など）
+    t => t.replace(/[◎◯○●★☆♪♡♥✨💫⭐🌟🎵🎶❤️💕🙆‍♀️👍✅🔥💖]/g, ''),
+    // 《》を削除（中身は残す）
+    t => t.replace(/《([^》]*)》/g, '$1'),
+    // 【】を削除（中身は残す）
+    t => t.replace(/【([^】]*)】/g, '$1'),
+    // ［］[]を削除（中身は残す）
+    t => t.replace(/[［\[]([^］\]]*)[］\]]/g, '$1'),
+    // 連続スペースを整理
+    t => t.replace(/\s+/g, ' ').trim(),
+  ]
 
-  // ③ テンプレートの後半を削って50文字に収める
-  text = template.replace('本日', prefix).replace('{TIME}', `${h}時`)
+  for (const step of steps) {
+    text = step(text)
+    if (text.length <= LIMIT) return text
+  }
+
+  // ③ 最終手段：50文字で切り捨て
   return text.slice(0, LIMIT)
 }
 
