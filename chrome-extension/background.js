@@ -380,6 +380,38 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
 }
 
 // ============================================================
+// 文字数制限（50文字）に収まるよう段階的に装飾文字を削除
+// 削除順: ①絵文字・記号 → ②《》 → ③【】 → ④[] → ⑤強制カット
+// 時間ラベル（例: 本日10時）は必ず保持
+// ============================================================
+function fitToLimit(template, prefix, timeLabel) {
+  const LIMIT = 50
+  let text = template.replace('本日', prefix).replace('{TIME}', timeLabel)
+  if (text.length <= LIMIT) return text
+
+  const steps = [
+    // ① 末尾の装飾記号を削除（◎♪★☆♡ など）
+    t => t.replace(/[◎◯○●★☆♪♡♥✨💫⭐🌟]/g, ''),
+    // ② 《》を外して中身だけ残す
+    t => t.replace(/《(.*?)》/g, '$1'),
+    // ③ 【】を外して中身だけ残す
+    t => t.replace(/【(.*?)】/g, '$1'),
+    // ④ []・［］を外して中身だけ残す
+    t => t.replace(/[\[［](.*?)[\]］]/g, '$1'),
+    // ⑤ 連続スペースを1つに整理
+    t => t.replace(/\s+/g, ' ').trim(),
+  ]
+
+  for (const step of steps) {
+    text = step(text)
+    if (text.length <= LIMIT) return text
+  }
+
+  // 最終手段：50文字で強制カット
+  return text.slice(0, LIMIT)
+}
+
+// ============================================================
 // 設定取得
 // ============================================================
 function getSettings() {

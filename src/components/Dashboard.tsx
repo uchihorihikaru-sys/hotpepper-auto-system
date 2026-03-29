@@ -258,9 +258,22 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* ⑥ ログイン失敗 */}
+          {/* ⑥ 文字数制限 */}
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#c62828', marginBottom: 6 }}>⑥ サロンボードにログインできない場合</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>⑥ キャッチの文字数制限（50文字）</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              50文字を超える場合、以下の順で装飾文字を削除して短縮<br />
+              <strong>① 絵文字・記号</strong>を削除（◎ ♪ ★ など）<br />
+              <strong>② 《》</strong>を外して中身を残す<br />
+              <strong>③ 【】</strong>を外して中身を残す<br />
+              <strong>④ []</strong>を外して中身を残す<br />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>※ 時間（例: 本日10時）は常に正確に保持</span>
+            </div>
+          </div>
+
+          {/* ⑦ ログイン失敗 */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#c62828', marginBottom: 6 }}>⑦ サロンボードにログインできない場合</div>
             <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
               ログインページへのリダイレクトを自動検知<br />
               <strong>① セッション切れの場合</strong>：保存済みID/PWで自動再ログインして続行<br />
