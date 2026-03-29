@@ -8,6 +8,7 @@
  *   5. 実行結果をSupabaseに記録
  */
 
+import 'dotenv/config'
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 
