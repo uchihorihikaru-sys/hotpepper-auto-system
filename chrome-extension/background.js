@@ -235,7 +235,6 @@ async function runUpdate() {
   let variantIndex = 0
   let foundSlots = null // ログ保存用（実際に取得したスロット）
   let targetDateLabel = null // ログ保存用（本日/明日/3月31日など）
-  let savedBaseCatch = null // 比較用（バリアント前の純粋なキャッチ）
   const slotsCache = {} // 毎回リセット → 常に最新データを取得
 
   try {
@@ -254,25 +253,16 @@ async function runUpdate() {
     foundSlots = Object.values(slotsCache).flat()
     targetDateLabel = currentResult.prefix || null // ログ保存用に退避
     const baseCatch = currentResult.catchText
-    savedBaseCatch = baseCatch // finallyで参照できるよう外側変数に退避
     status = currentResult.hasSlot ? 'success' : 'no_slots'
     console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
 
-    // Step2: 前回と同一テキストの場合は1文字変えて強制更新
+    // Step2: 毎回ブラケット種類を交互に変更（[]↔〈〉）して常に差分を出す
     const stored = await new Promise(resolve =>
-      chrome.storage.local.get(['lastBaseCatch', 'catchVariantIndex'], resolve)
+      chrome.storage.local.get(['catchVariantIndex'], resolve)
     )
-    const lastBaseCatch = stored.lastBaseCatch || ''
-    variantIndex = stored.catchVariantIndex || 0
-
-    if (baseCatch === lastBaseCatch) {
-      variantIndex = (variantIndex % 4) + 1  // 1→2→3→4→1... と循環
-      generatedCatch = applyVariation(baseCatch, variantIndex)
-      console.log('[Lay. Catch Board] 同一キャッチのため語尾変更 (variant', variantIndex, '):', generatedCatch)
-    } else {
-      variantIndex = 0
-      generatedCatch = baseCatch
-    }
+    variantIndex = ((stored.catchVariantIndex || 0) % 2) + 1  // 1→2→1→2...
+    generatedCatch = applyVariation(baseCatch, variantIndex)
+    console.log('[Lay. Catch Board] ブラケット変更 (variant', variantIndex, '):', generatedCatch)
 
     // Step3: 次回実行（+1時間）のキャッチを予測（キャッシュ再利用でタブなし）
     const nextRun = new Date(now.getTime() + 60 * 60 * 1000)
@@ -316,8 +306,7 @@ async function runUpdate() {
       lastRun: new Date().toISOString(),
       nextRunTime,
       nextPredictedCatch,
-      lastBaseCatch: savedBaseCatch,  // バリアント前の純粋なキャッチを保存（比較用）
-      catchVariantIndex: variantIndex
+      catchVariantIndex: variantIndex  // []↔〈〉の交互切り替え用
     })
 
     console.log(`[Lay. Catch Board] 完了 [${status}] ${durationMs}ms`)
@@ -891,14 +880,14 @@ function filterContinuousHour(slots) {
   return result
 }
 
-// 同一キャッチの場合に1文字だけ変えてサロンボードに「更新」と認識させる
-// variant 1: ◎→〇  variant 2: 〇→◎ + ♪→♩  variant 3: ♩→♪ + ◎→〇
+// 毎回ブラケット種類を交互に切り替える（文字数変わらず確実に差分を出す）
+// variant 1: [] を使用  variant 2: 〈〉 を使用
 function applyVariation(text, variantIndex) {
-  const suffixes = ['☆', '◎', '♩', '！']
-  const suffix = suffixes[(variantIndex - 1) % suffixes.length]
-  // 末尾に既存のサフィックスがあれば除去
-  const base = text.replace(/[☆◎♩！]$/, '')
-  // 50文字制限内に収まるよう、必要なら49文字に詰めてサフィックスを追加
-  const trimmed = base.length >= 50 ? base.slice(0, 49) : base
-  return trimmed + suffix
+  if (variantIndex % 2 === 1) {
+    // 〈〉 → [] に変換（または既に [] のままでOK）
+    return text.replace(/〈([^〉]*)〉/g, '[$1]')
+  } else {
+    // [] → 〈〉 に変換
+    return text.replace(/\[([^\]]*)\]/g, '〈$1〉')
+  }
 }
