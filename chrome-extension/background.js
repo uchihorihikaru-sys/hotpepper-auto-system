@@ -235,6 +235,7 @@ async function runUpdate() {
   let variantIndex = 0
   let foundSlots = null // ログ保存用（実際に取得したスロット）
   let targetDateLabel = null // ログ保存用（本日/明日/3月31日など）
+  let savedBaseCatch = null // 比較用（バリアント前の純粋なキャッチ）
   const slotsCache = {} // 毎回リセット → 常に最新データを取得
 
   try {
@@ -253,6 +254,7 @@ async function runUpdate() {
     foundSlots = Object.values(slotsCache).flat()
     targetDateLabel = currentResult.prefix || null // ログ保存用に退避
     const baseCatch = currentResult.catchText
+    savedBaseCatch = baseCatch // finallyで参照できるよう外側変数に退避
     status = currentResult.hasSlot ? 'success' : 'no_slots'
     console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
 
@@ -314,7 +316,7 @@ async function runUpdate() {
       lastRun: new Date().toISOString(),
       nextRunTime,
       nextPredictedCatch,
-      lastBaseCatch: baseCatch,  // バリアント前の純粋なキャッチを保存（比較用）
+      lastBaseCatch: savedBaseCatch,  // バリアント前の純粋なキャッチを保存（比較用）
       catchVariantIndex: variantIndex
     })
 
