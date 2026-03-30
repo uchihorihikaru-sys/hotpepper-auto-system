@@ -264,9 +264,9 @@ async function runUpdate() {
     variantIndex = stored.catchVariantIndex || 0
 
     if (baseCatch === lastBaseCatch) {
-      variantIndex = (variantIndex % 3) + 1  // 1→2→3→1... と循環
+      variantIndex = (variantIndex % 4) + 1  // 1→2→3→4→1... と循環
       generatedCatch = applyVariation(baseCatch, variantIndex)
-      console.log('[Lay. Catch Board] 同一キャッチのため微変更 (variant', variantIndex, '):', generatedCatch)
+      console.log('[Lay. Catch Board] 同一キャッチのため語尾変更 (variant', variantIndex, '):', generatedCatch)
     } else {
       variantIndex = 0
       generatedCatch = baseCatch
@@ -314,7 +314,7 @@ async function runUpdate() {
       lastRun: new Date().toISOString(),
       nextRunTime,
       nextPredictedCatch,
-      lastBaseCatch: generatedCatch,
+      lastBaseCatch: baseCatch,  // バリアント前の純粋なキャッチを保存（比較用）
       catchVariantIndex: variantIndex
     })
 
@@ -892,16 +892,10 @@ function filterContinuousHour(slots) {
 // 同一キャッチの場合に1文字だけ変えてサロンボードに「更新」と認識させる
 // variant 1: ◎→〇  variant 2: 〇→◎ + ♪→♩  variant 3: ♩→♪ + ◎→〇
 function applyVariation(text, variantIndex) {
-  switch (variantIndex % 3) {
-    case 1:
-      return text.includes('◎')
-        ? text.replace('◎', '〇')
-        : text + '　'  // ◎がない場合は全角スペースを末尾に（50字以内で）
-    case 2:
-      return text.replace('〇', '◎').replace('♪', '♩')
-    case 0: // = 3 % 3
-      return text.replace('♩', '♪').replace('〇', '◎')
-    default:
-      return text
-  }
+  const suffixes = ['☆', '◎', '♩', '！']
+  const suffix = suffixes[(variantIndex - 1) % suffixes.length]
+  // 末尾に既存のサフィックスがあれば除去してから新しいものを追加
+  const base = text.replace(/[☆◎♩！]$/, '')
+  const result = base + suffix
+  return result.length <= 50 ? result : base
 }
