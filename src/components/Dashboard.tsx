@@ -261,11 +261,12 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* ⑤ 同一キャッチ */}
+          {/* ⑤ ブラケット交互切り替え */}
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>⑤ 前回と同じキャッチの場合</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>⑤ 毎回異なる文章を自動生成</div>
             <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
-              自動で1文字変更して強制更新（例：◎→〇）
+              実行するたびに <strong>[カットカラー¥8800]</strong> ↔ <strong>〈カットカラー¥8800〉</strong> を自動で交互切り替え<br />
+              空き状況・日時が同じでも必ず前回と異なる文章になる
             </div>
           </div>
 
