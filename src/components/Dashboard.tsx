@@ -273,11 +273,12 @@ export function Dashboard() {
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', marginBottom: 6 }}>⑥ キャッチの文字数制限（50文字）</div>
             <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.8 }}>
+              <strong>余計なスペースは常に除去</strong>（文字数に関わらず毎回適用）<br />
               50文字を超える場合、以下の順で装飾文字を削除して短縮<br />
               <strong>① 絵文字・記号</strong>を削除（◎ ♪ ★ など）<br />
               <strong>② 《》</strong>を外して中身を残す<br />
               <strong>③ 【】</strong>を外して中身を残す<br />
-              <strong>④ []</strong>を外して中身を残す<br />
+              <strong>④ []・〈〉</strong>を外して中身を残す<br />
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>※ 時間（例: 本日10時）は常に正確に保持</span>
             </div>
           </div>

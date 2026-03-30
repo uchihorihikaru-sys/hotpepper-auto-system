@@ -398,6 +398,8 @@ async function selectBestSlot(referenceTime, slotsCache, settings) {
 function fitToLimit(template, prefix, timeLabel) {
   const LIMIT = 50
   let text = template.replace('本日', prefix).replace('{TIME}', timeLabel)
+  // 余計なスペースは常に除去（制限に関わらず常時適用）
+  text = text.replace(/\s/g, '')
   if (text.length <= LIMIT) return text
 
   const steps = [
@@ -407,10 +409,8 @@ function fitToLimit(template, prefix, timeLabel) {
     t => t.replace(/《(.*?)》/g, '$1'),
     // ③ 【】を外して中身だけ残す
     t => t.replace(/【(.*?)】/g, '$1'),
-    // ④ []・［］を外して中身だけ残す
-    t => t.replace(/[\[［](.*?)[\]］]/g, '$1'),
-    // ⑤ 連続スペースを1つに整理
-    t => t.replace(/\s+/g, ' ').trim(),
+    // ④ []・［］・〈〉を外して中身だけ残す
+    t => t.replace(/[\[［](.*?)[\]］]/g, '$1').replace(/〈(.*?)〉/g, '$1'),
   ]
 
   for (const step of steps) {
