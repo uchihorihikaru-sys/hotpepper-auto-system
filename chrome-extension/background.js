@@ -896,8 +896,9 @@ function filterContinuousHour(slots) {
 function applyVariation(text, variantIndex) {
   const suffixes = ['☆', '◎', '♩', '！']
   const suffix = suffixes[(variantIndex - 1) % suffixes.length]
-  // 末尾に既存のサフィックスがあれば除去してから新しいものを追加
+  // 末尾に既存のサフィックスがあれば除去
   const base = text.replace(/[☆◎♩！]$/, '')
-  const result = base + suffix
-  return result.length <= 50 ? result : base
+  // 50文字制限内に収まるよう、必要なら49文字に詰めてサフィックスを追加
+  const trimmed = base.length >= 50 ? base.slice(0, 49) : base
+  return trimmed + suffix
 }
