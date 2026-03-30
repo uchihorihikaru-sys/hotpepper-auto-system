@@ -248,21 +248,21 @@ async function runUpdate() {
     console.log('[Lay. Catch Board] 実行開始:', now.toLocaleTimeString('ja-JP'))
 
     // Step1: 現在時刻基準でキャッチ生成（常に最新スロットをフェッチ）
-    const currentResult = await selectBestSlot(now, slotsCache, settings)
-    // フェッチした全スロットをログ用に収集
-    foundSlots = Object.values(slotsCache).flat()
-    targetDateLabel = currentResult.prefix || null // ログ保存用に退避
-    const baseCatch = currentResult.catchText
-    status = currentResult.hasSlot ? 'success' : 'no_slots'
-    console.log('[Lay. Catch Board] ベースキャッチ:', baseCatch)
-
-    // Step2: 毎回ブラケット種類を交互に変更（[]↔〈〉）して常に差分を出す
+    // Step2: fitToLimit に渡す前にブラケット種類を切り替える（[]↔〈〉）
     const stored = await new Promise(resolve =>
       chrome.storage.local.get(['catchVariantIndex'], resolve)
     )
     variantIndex = ((stored.catchVariantIndex || 0) % 2) + 1  // 1→2→1→2...
-    generatedCatch = applyVariation(baseCatch, variantIndex)
-    console.log('[Lay. Catch Board] ブラケット変更 (variant', variantIndex, '):', generatedCatch)
+    const bracketedSettings = applyBracketToSettings(settings, variantIndex)
+    console.log('[Lay. Catch Board] ブラケット variant:', variantIndex)
+
+    const currentResult = await selectBestSlot(now, slotsCache, bracketedSettings)
+    // フェッチした全スロットをログ用に収集
+    foundSlots = Object.values(slotsCache).flat()
+    targetDateLabel = currentResult.prefix || null // ログ保存用に退避
+    generatedCatch = currentResult.catchText
+    status = currentResult.hasSlot ? 'success' : 'no_slots'
+    console.log('[Lay. Catch Board] 生成キャッチ:', generatedCatch)
 
     // Step3: 次回実行（+1時間）のキャッチを予測（キャッシュ再利用でタブなし）
     const nextRun = new Date(now.getTime() + 60 * 60 * 1000)
@@ -880,14 +880,17 @@ function filterContinuousHour(slots) {
   return result
 }
 
-// 毎回ブラケット種類を交互に切り替える（文字数変わらず確実に差分を出す）
+// fitToLimit に渡す前にテンプレートのブラケット種類を切り替える
 // variant 1: [] を使用  variant 2: 〈〉 を使用
-function applyVariation(text, variantIndex) {
-  if (variantIndex % 2 === 1) {
-    // 〈〉 → [] に変換（または既に [] のままでOK）
-    return text.replace(/〈([^〉]*)〉/g, '[$1]')
-  } else {
-    // [] → 〈〉 に変換
-    return text.replace(/\[([^\]]*)\]/g, '〈$1〉')
+// テンプレートを変換してから fitToLimit に渡すことで、
+// どのパターン（長い日付含む）でも確実にブラケット種類が反映される
+function applyBracketToSettings(settings, variantIndex) {
+  const convert = str => variantIndex % 2 === 1
+    ? str.replace(/〈([^〉]*)〉/g, '[$1]')   // 〈〉→[]
+    : str.replace(/\[([^\]]*)\]/g, '〈$1〉') // []→〈〉
+  return {
+    ...settings,
+    template: convert(settings.template),
+    fallback: convert(settings.fallback),
   }
 }
