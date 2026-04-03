@@ -1,6 +1,6 @@
 {
-  "name": "Lay. Catch Board",
-  "short_name": "Lay. Catch Board",
+  "name": "Catch Board",
+  "short_name": "Catch Board",
   "description": "Salon Solution System - ホットペッパービューティ キャッチコピー自動更新",
   "start_url": "/index.html",
   "display": "standalone",
