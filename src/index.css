@@ -41,7 +41,8 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 40%, #c4b5fd 100%);
+  background-attachment: fixed;
 }
 
 h1, h2 {
