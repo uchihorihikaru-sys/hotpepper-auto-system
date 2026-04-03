@@ -14,7 +14,6 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="logo">
-            <div className="logo-icon">CB</div>
             <div className="logo-titles">
               <span className="logo-name">Catch Board</span>
               <span className="logo-sub">Salon Solution System</span>
