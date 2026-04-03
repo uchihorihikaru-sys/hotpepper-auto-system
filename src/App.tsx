@@ -14,8 +14,11 @@ function App() {
       <header className="header">
         <div className="header-inner">
           <div className="logo">
-            <span className="logo-icon">S</span>
-            <span className="logo-text">Lay. Catch Board</span>
+            <div className="logo-icon">LC</div>
+            <div className="logo-titles">
+              <span className="logo-name">Lay. Catch Board</span>
+              <span className="logo-sub">Lay. / Salon Solution System</span>
+            </div>
           </div>
           <nav className="nav">
             <button

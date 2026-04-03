@@ -1,10 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>hotpepper-auto-system</title>
+    <meta name="theme-color" content="#7c3aed" />
+    <title>Lay. Catch Board</title>
+    <script>
+      // CSS変数でプライマリカラーを動的変更する関数
+      function applyPrimaryColor(primary, primaryDark, primaryLight) {
+        const root = document.documentElement
+        if (primary)      root.style.setProperty('--primary', primary)
+        if (primaryDark)  root.style.setProperty('--primary-dark', primaryDark)
+        if (primaryLight) root.style.setProperty('--primary-light', primaryLight)
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
