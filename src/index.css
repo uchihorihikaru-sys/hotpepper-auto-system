@@ -1,12 +1,15 @@
 :root {
   /* === Triple S Brand Colors === */
   --primary: #7c3aed;
-  --primary-dark: #5a4aa8;
+  --primary-dark: #5b21b6;
   --primary-light: #f5f3ff;
   --bg: #faf8ff;
-  --text: #1e1b4b;
+  --card: #ffffff;
+  --text: #111827;
   --text-light: #6b7280;
   --border: #e5e7eb;
+  --shadow: 0 1px 8px rgba(0,0,0,0.06), 0 2px 16px rgba(0,0,0,0.04);
+  --radius: 12px;
 
   /* 後方互換エイリアス */
   --brand: var(--primary);
